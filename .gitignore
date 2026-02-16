@@ -1,0 +1,10 @@
+# Secret data
+constants.py
+.env
+
+# Database file (don't upload your users' data!)
+*.db
+
+# Python cache
+__pycache__/
+*.pyc

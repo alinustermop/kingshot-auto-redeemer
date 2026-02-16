@@ -1,0 +1,6 @@
+SALT = ""
+PLAYER_URL = "https://kingshot-giftcode.centurygame.com/api/player"
+REDEEM_URL = "https://kingshot-giftcode.centurygame.com/api/gift_code"
+ACTIVE_CODES_URL = "https://kingshot.net/api/gift-codes"
+DB_NAME = "kingshot.db"
+LOG_FILE = "bot.log"
