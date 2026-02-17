@@ -1,6 +1,9 @@
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "kingshot.db")
+LOG_FILE = os.path.join(BASE_DIR, "bot.log")
+
 SALT = ""
 PLAYER_URL = "https://kingshot-giftcode.centurygame.com/api/player"
 REDEEM_URL = "https://kingshot-giftcode.centurygame.com/api/gift_code"
 ACTIVE_CODES_URL = "https://kingshot.net/api/gift-codes"
-DB_NAME = "kingshot.db"
-LOG_FILE = "bot.log"
