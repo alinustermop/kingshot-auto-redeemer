@@ -53,7 +53,8 @@ class DatabaseManager:
         is_success = ( 
             (response.get('code') == 0) or 
             (response.get('err_code') == 20000) or 
-            (response.get('err_code') == 40008) 
+            (response.get('err_code') == 40008) or
+            (response.get('err_code') == 40011)
         )
         
         if is_success:
@@ -64,7 +65,10 @@ class DatabaseManager:
                 )
                 self.conn.commit()
                 if self.cursor.rowcount > 0:
-                    self.logger.info(f"Logged redeemed code {code_str} for {fid}.")
+                    if response.get('err_code') == 40011:
+                         self.logger.info(f"Logged code {code_str} for {fid} (Equivalent of this code was already redeemed).")
+                    else:
+                         self.logger.info(f"Logged redeemed code {code_str} for {fid}.")
             except Exception as e:
                 self.logger.error(f"Database error logging code: {e}")
 
@@ -84,6 +88,14 @@ class DatabaseManager:
             codes = p['codes'] if p['codes'] else "None"
             self.logger.info(f"{p['fid']:<15} | {p['nickname']:<15} | {codes}")
 
+    def player_exists(self, fid):
+        self.cursor.execute('SELECT 1 FROM players WHERE fid = ?', (fid,))
+        return self.cursor.fetchone() is not None
+    
+    def get_player_count(self):
+        self.cursor.execute('SELECT COUNT(*) as count FROM players')
+        return self.cursor.fetchone()['count']
+
     def _save_player_to_db(self, data):
         try:
             self.cursor.execute(
@@ -91,7 +103,12 @@ class DatabaseManager:
                 (data['fid'], data['nickname'])
             )
             self.conn.commit()
-            self.logger.info(f"New player saved: {data['nickname']}")
+
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"New player saved: {data['nickname']}")
+            else:
+                self.logger.info(f"Player already exists: {data['nickname']} (Skipped)")
+
         except Exception as e:
             self.logger.error(f"Database error saving player: {e}")
 

@@ -1,0 +1,116 @@
+2026-02-18 14:00:00 | INFO     | DB   | Database tables initialized successfully.
+2026-02-18 14:00:00 | INFO     | DB   | Player ID       | Nickname        | Codes
+2026-02-18 14:00:00 | INFO     | DB   | ------------------------------------------------------------
+2026-02-18 14:00:00 | INFO     | DB   | 226431996       | Lady Aurelia    | RAMADAN, SPRINGFES217, LOVEKS2026, KINGSTORE210
+2026-02-18 14:00:00 | INFO     | DB   | 105852213       | Nuclear         | RAMADAN, LOVEKS2026
+2026-02-18 14:00:00 | INFO     | DB   | 200215960       | PeacefulHermes  | None
+2026-02-18 14:00:05 | INFO     | API  | Player found: Miny Acle (ID: 111111112)
+2026-02-18 14:00:05 | INFO     | DB   | New player saved: Miny Acle
+2026-02-18 14:00:11 | WARNING  | API  | Player 12345678 is NOT found: role not exist.
+2026-02-18 14:00:17 | INFO     | API  | Player found: useless (ID: 151247588)
+2026-02-18 14:00:17 | INFO     | MAIN | Skipped check: 200215960 (Already in Database)
+2026-02-18 14:00:17 | INFO     | DB   | New player saved: useless
+2026-02-18 14:00:23 | INFO     | API  | Player found: LittleLady (ID: 152443639)
+2026-02-18 14:00:23 | INFO     | DB   | New player saved: LittleLady
+2026-02-18 14:00:29 | INFO     | API  | Player found: zSoul (ID: 177950447)
+2026-02-18 14:00:29 | INFO     | DB   | New player saved: zSoul
+2026-02-18 14:00:35 | INFO     | API  | Player found: lord207592349 (ID: 207592349)
+2026-02-18 14:00:35 | INFO     | DB   | New player saved: lord207592349
+2026-02-18 14:00:41 | INFO     | API  | Player found: Volkan (ID: 8767319)
+2026-02-18 14:00:41 | INFO     | DB   | New player saved: Volkan
+2026-02-18 14:00:47 | WARNING  | API  | Player 12345678 is NOT found: role not exist.
+2026-02-18 14:00:47 | INFO     | MAIN | Skipped check: 105852213 (Already in Database)
+2026-02-18 14:00:47 | INFO     | MAIN | Skipped check: 226431996 (Already in Database)
+2026-02-18 14:00:48 | INFO     | DB   | Player ID       | Nickname        | Codes
+2026-02-18 14:00:48 | INFO     | DB   | ------------------------------------------------------------
+2026-02-18 14:00:48 | INFO     | DB   | 226431996       | Lady Aurelia    | RAMADAN, SPRINGFES217, LOVEKS2026, KINGSTORE210
+2026-02-18 14:00:48 | INFO     | DB   | 105852213       | Nuclear         | RAMADAN, LOVEKS2026
+2026-02-18 14:00:48 | INFO     | DB   | 200215960       | PeacefulHermes  | None
+2026-02-18 14:00:48 | INFO     | DB   | 111111112       | Miny Acle       | None
+2026-02-18 14:00:48 | INFO     | DB   | 151247588       | useless         | None
+2026-02-18 14:00:48 | INFO     | DB   | 152443639       | LittleLady      | None
+2026-02-18 14:00:48 | INFO     | DB   | 177950447       | zSoul           | None
+2026-02-18 14:00:48 | INFO     | DB   | 207592349       | lord207592349   | None
+2026-02-18 14:00:48 | INFO     | DB   | 8767319         | Volkan          | None
+2026-02-18 14:00:48 | INFO     | MAIN | --- Starting Redemption Cycle...
+2026-02-18 14:00:53 | INFO     | API  | Fetching active gift codes...
+2026-02-18 14:00:53 | INFO     | API  | Found 4 active codes: RAMADAN, SPRINGFES217, LOVEKS2026, KINGSTORE210
+2026-02-18 14:00:53 | INFO     | MAIN | Loaded 9 players and 4 codes.
+2026-02-18 14:00:53 | INFO     | MAIN | Skipping Lady Aurelia: All codes already redeemed.
+2026-02-18 14:00:58 | INFO     | API  | Player found: Nuclear (ID: 105852213)
+2026-02-18 14:01:08 | INFO     | API  | Redemption SUCCESS for 105852213 - Code: SPRINGFES217
+2026-02-18 14:01:08 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 105852213.
+2026-02-18 14:01:18 | INFO     | API  | Redemption SUCCESS for 105852213 - Code: KINGSTORE210
+2026-02-18 14:01:18 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 105852213.
+2026-02-18 14:01:28 | INFO     | API  | Player found: PeacefulHermes (ID: 200215960)
+2026-02-18 14:01:38 | INFO     | API  | Redemption SUCCESS for 200215960 - Code: RAMADAN
+2026-02-18 14:01:38 | INFO     | DB   | Logged redeemed code RAMADAN for 200215960.
+2026-02-18 14:01:48 | INFO     | API  | Redemption SUCCESS for 200215960 - Code: SPRINGFES217
+2026-02-18 14:01:48 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 200215960.
+2026-02-18 14:01:58 | INFO     | API  | Redemption SUCCESS for 200215960 - Code: LOVEKS2026
+2026-02-18 14:01:58 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 200215960.
+2026-02-18 14:02:08 | INFO     | API  | Redemption SUCCESS for 200215960 - Code: KINGSTORE210
+2026-02-18 14:02:08 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 200215960.
+2026-02-18 14:02:18 | INFO     | API  | Player found: Miny Acle (ID: 111111112)
+2026-02-18 14:02:28 | INFO     | API  | Redemption SUCCESS for 111111112 - Code: RAMADAN
+2026-02-18 14:02:28 | INFO     | DB   | Logged redeemed code RAMADAN for 111111112.
+2026-02-18 14:02:38 | INFO     | API  | Redemption SUCCESS for 111111112 - Code: SPRINGFES217
+2026-02-18 14:02:38 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 111111112.
+2026-02-18 14:02:48 | INFO     | API  | Redemption SUCCESS for 111111112 - Code: LOVEKS2026
+2026-02-18 14:02:48 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 111111112.
+2026-02-18 14:02:58 | INFO     | API  | Redemption SUCCESS for 111111112 - Code: KINGSTORE210
+2026-02-18 14:02:58 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 111111112.
+2026-02-18 14:03:08 | INFO     | API  | Player found: useless (ID: 151247588)
+2026-02-18 14:03:18 | INFO     | API  | Redemption SUCCESS for 151247588 - Code: RAMADAN
+2026-02-18 14:03:18 | INFO     | DB   | Logged redeemed code RAMADAN for 151247588.
+2026-02-18 14:03:28 | INFO     | API  | Redemption SUCCESS for 151247588 - Code: SPRINGFES217
+2026-02-18 14:03:28 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 151247588.
+2026-02-18 14:03:38 | INFO     | API  | Redemption SUCCESS for 151247588 - Code: LOVEKS2026
+2026-02-18 14:03:38 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 151247588.
+2026-02-18 14:03:48 | INFO     | API  | Redemption SUCCESS for 151247588 - Code: KINGSTORE210
+2026-02-18 14:03:48 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 151247588.
+2026-02-18 14:03:58 | INFO     | API  | Player found: LittleLady (ID: 152443639)
+2026-02-18 14:04:08 | INFO     | API  | Redemption SUCCESS for 152443639 - Code: RAMADAN
+2026-02-18 14:04:08 | INFO     | DB   | Logged redeemed code RAMADAN for 152443639.
+2026-02-18 14:04:18 | INFO     | API  | Redemption SUCCESS for 152443639 - Code: SPRINGFES217
+2026-02-18 14:04:18 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 152443639.
+2026-02-18 14:04:28 | INFO     | API  | Redemption SUCCESS for 152443639 - Code: LOVEKS2026
+2026-02-18 14:04:28 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 152443639.
+2026-02-18 14:04:38 | INFO     | API  | Redemption SUCCESS for 152443639 - Code: KINGSTORE210
+2026-02-18 14:04:38 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 152443639.
+2026-02-18 14:04:48 | INFO     | API  | Player found: zSoul (ID: 177950447)
+2026-02-18 14:04:58 | INFO     | API  | Redemption SUCCESS for 177950447 - Code: RAMADAN
+2026-02-18 14:04:58 | INFO     | DB   | Logged redeemed code RAMADAN for 177950447.
+2026-02-18 14:05:08 | INFO     | API  | Redemption SUCCESS for 177950447 - Code: SPRINGFES217
+2026-02-18 14:05:08 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 177950447.
+2026-02-18 14:05:18 | WARNING  | API  | Redemption FAILED for 177950447 - Code: LOVEKS2026 | Msg: NOT LOGIN.
+2026-02-18 14:05:18 | WARNING  | MAIN | Failed zSoul on LOVEKS2026: NOT LOGIN. (Err: 40009)
+2026-02-18 14:05:23 | INFO     | MAIN | Re-queueing zSoul due to error.
+2026-02-18 14:05:28 | INFO     | API  | Player found: lord207592349 (ID: 207592349)
+2026-02-18 14:05:38 | INFO     | API  | Redemption SUCCESS for 207592349 - Code: RAMADAN
+2026-02-18 14:05:38 | INFO     | DB   | Logged redeemed code RAMADAN for 207592349.
+2026-02-18 14:05:48 | INFO     | API  | Redemption SUCCESS for 207592349 - Code: SPRINGFES217
+2026-02-18 14:05:48 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 207592349.
+2026-02-18 14:05:58 | INFO     | API  | Redemption SUCCESS for 207592349 - Code: LOVEKS2026
+2026-02-18 14:05:58 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 207592349.
+2026-02-18 14:06:08 | INFO     | API  | Redemption SUCCESS for 207592349 - Code: KINGSTORE210
+2026-02-18 14:06:08 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 207592349.
+2026-02-18 14:06:18 | INFO     | API  | Player found: Volkan (ID: 8767319)
+2026-02-18 14:06:28 | INFO     | API  | Redemption SUCCESS for 8767319 - Code: RAMADAN
+2026-02-18 14:06:28 | INFO     | DB   | Logged redeemed code RAMADAN for 8767319.
+2026-02-18 14:06:38 | INFO     | API  | Redemption SUCCESS for 8767319 - Code: SPRINGFES217
+2026-02-18 14:06:38 | INFO     | DB   | Logged redeemed code SPRINGFES217 for 8767319.
+2026-02-18 14:06:48 | INFO     | API  | Redemption SUCCESS for 8767319 - Code: LOVEKS2026
+2026-02-18 14:06:48 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 8767319.
+2026-02-18 14:06:58 | WARNING  | API  | Redemption FAILED for 8767319 - Code: KINGSTORE210 | Msg: SAME TYPE EXCHANGE.
+2026-02-18 14:06:58 | INFO     | DB   | Logged code KINGSTORE210 for 8767319 (Equivalent of this code was already redeemed).
+2026-02-18 14:07:08 | INFO     | API  | Player found: zSoul (ID: 177950447)
+2026-02-18 14:07:18 | INFO     | API  | Redemption SUCCESS for 177950447 - Code: LOVEKS2026
+2026-02-18 14:07:18 | INFO     | DB   | Logged redeemed code LOVEKS2026 for 177950447.
+2026-02-18 14:07:28 | INFO     | API  | Redemption SUCCESS for 177950447 - Code: KINGSTORE210
+2026-02-18 14:07:28 | INFO     | DB   | Logged redeemed code KINGSTORE210 for 177950447.
+2026-02-18 14:07:33 | INFO     | MAIN | --- Redemption Cycle Completed ---
+2026-02-18 14:07:33 | INFO     | MAIN | Players processed: total - 9, skipped (Already Had All): 1, skipped (Errors/Dropped):  0
+2026-02-18 14:07:33 | INFO     | MAIN |    • 7 players redeemed 4 codes
+2026-02-18 14:07:33 | INFO     | MAIN |    • 1 player redeemed 2 codes
+2026-02-18 14:07:33 | INFO     | MAIN | ========================================

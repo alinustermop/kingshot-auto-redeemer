@@ -118,8 +118,8 @@ class KingshotBot:
                 err_code = result.get('err_code')
                 status_code = result.get('code')
                 
-                # CASE A: SUCCESS / ALREADY CLAIMED
-                if status_code == 0 or err_code in [20000, 40008]:
+                # CASE A: SUCCESS / ALREADY CLAIMED / MUTUALLY EXCLUSIVE
+                if status_code == 0 or err_code in [20000, 40008, 40011]:
                     if status_code == 0 or err_code == 20000:
                         # Only count actual success as a "Redemption" for stats
                         stats_redemptions[fid] += 1
@@ -230,23 +230,31 @@ class KingshotBot:
 # For testing: 
 if __name__ == "__main__":
     bot = KingshotBot()
+    print("\n=== STEP 0: VERIFYING DB CONTENT ===")
+    bot.db.show_full_table()
     print("\n=== STEP 1: SEEDING DATABASE ===")
     test_ids = [
         "111111112",
         "12345678",
+        "200215960",
         "151247588",
         "152443639",
         "177950447",
         "207592349",
         "8767319",
-        "8075797",
         "12345678",
+        "105852213"
+        "226431996",
     ]
 
     added_count = 0
     skipped_count = 0
     
-    for fid in test_ids:
+    for fid_str in test_ids:
+        fid = int(fid_str)
+        if bot.db.player_exists(fid):
+            print(f"Skipped check: {fid} (Already in Database)")
+            continue
         player_data = bot.api.get_player_info(fid)
         if player_data:
             bot.db._save_player_to_db(player_data)
