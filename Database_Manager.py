@@ -12,9 +12,6 @@ class DatabaseManager:
 
     def create_tables(self):
         try:
-            # For testing:
-            # self.cursor.execute("DROP TABLE IF EXISTS players")
-            # self.cursor.execute("DROP TABLE IF EXISTS redemptions")
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS players (
                     fid INTEGER PRIMARY KEY,

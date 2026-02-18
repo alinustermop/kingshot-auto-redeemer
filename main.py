@@ -181,15 +181,11 @@ class KingshotBot:
         logger.info("="*40 + "\n")
 
     def _check_pause(self, error_count):
-        """Helper to pause if too many errors occur in a row."""
         if error_count >= self.error_threshold:
             logger.warning(f"SERIOUS ERROR: {error_count} Players failed in a row. Pausing for {self.pause_duration}s...")
             time.sleep(self.pause_duration)
-            # We do NOT reset the counter here; if the next one fails, we pause again.
-            # It will only reset when a player succeeds.
 
     def run_once(self):
-        """Runs the cycle immediately once."""
         try:
             self.run_redemption_cycle()
         except KeyboardInterrupt:
@@ -197,7 +193,6 @@ class KingshotBot:
             sys.exit()
 
     def run_daily_loop(self):
-        """Runs the cycle every ~24 hours."""
         logger.info("Bot started in DAILY SCHEDULE mode")
         
         while True:
