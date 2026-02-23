@@ -217,56 +217,8 @@ class KingshotBot:
                 time.sleep(60)
  
 
-# For real use:
-# if __name__ == "__main__":
-#     bot = KingshotBot()
-#     bot.run_daily_loop()
-
-# For testing: 
 if __name__ == "__main__":
-    bot = KingshotBot()
-    print("\n=== STEP 0: VERIFYING DB CONTENT ===")
-    bot.db.show_full_table()
-    print("\n=== STEP 1: SEEDING DATABASE ===")
-    test_ids = [
-        "111111112",
-        "12345678",
-        "200215960",
-        "151247588",
-        "152443639",
-        "177950447",
-        "207592349",
-        "8767319",
-        "12345678",
-        "105852213"
-        "226431996",
-    ]
-
-    added_count = 0
-    skipped_count = 0
-    
-    for fid_str in test_ids:
-        fid = int(fid_str)
-        if bot.db.player_exists(fid):
-            print(f"Skipped check: {fid} (Already in Database)")
-            continue
-        player_data = bot.api.get_player_info(fid)
-        if player_data:
-            bot.db._save_player_to_db(player_data)
-            print(f"Saved: {player_data['nickname']} (Lv.{player_data['stove_lv']})")
-            added_count += 1
-        else:
-            skipped_count += 1
-        time.sleep(1.0) 
-    print("\n" + "="*30)
-    print(f"   Players Added/Verified: {added_count}")
-    print(f"   IDs Skipped (Invalid):  {skipped_count}")
-    print("="*30 + "\n")
-
-    print("\n=== STEP 2: VERIFYING DB CONTENT ===")
-    bot.db.show_full_table()
-
-    print("\n=== STEP 3: STARTING AUTOMATION ===")
-    print("Bot is now running. Press Ctrl+C to stop.")
-
-    bot.run_once()
+        bot = KingshotBot()
+        # Choose what option you want to use:
+        # bot.run_daily_loop()
+        bot.run_once()
