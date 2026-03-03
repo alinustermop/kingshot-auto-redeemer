@@ -1,7 +1,7 @@
 import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, "kingshot.db")
-LOG_FILE = os.path.join(BASE_DIR, "bot.log")
+DATA_DIR = "/app/data"
+DB_NAME = os.path.join(DATA_DIR, "kingshot.db")
+LOG_FILE = os.path.join(DATA_DIR, "bot.log")
 DISCORD_TOKEN = ""
 
 SALT = ""

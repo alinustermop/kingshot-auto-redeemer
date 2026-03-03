@@ -10,23 +10,32 @@ from Database_Manager import DatabaseManager
 import constants
 
 # --- LOGGING SETUP ---
+class DiscordNameFilter(logging.Filter):
+    def filter(self, record):
+        if record.name.startswith("discord"):
+            record.name = "BOT"
+        return True
+    
 logging.Formatter.converter = time.gmtime
 
 file_handler = RotatingFileHandler(
     constants.LOG_FILE, 
-    maxBytes=5*1024*1024, # 5 MB per file
+    maxBytes= 5*1024*1024, # 5 MB per file
     backupCount=3,        # Keep 3 old log files (15MB total max)
     encoding='utf-8'
 )
 
+stream_handler = logging.StreamHandler(sys.stdout)
+
+discord_filter = DiscordNameFilter()
+file_handler.addFilter(discord_filter)
+stream_handler.addFilter(discord_filter)
+
 logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s | %(levelname)-8s | %(name)-4s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            file_handler,
-            logging.StreamHandler(sys.stdout)
-        ]
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)-8s | %(name)-4s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[file_handler, stream_handler]
 )
 
 logger = logging.getLogger("MAIN")
@@ -99,8 +108,6 @@ class KingshotBot:
 
             # 1. LOGIN (Get Player Info)
             profile = self.api.get_player_info(fid)
-            if profile['nickname'] != player['nickname']:
-                self.db.update_player_nickname(fid, profile['nickname'])
             
             if not profile:
                 # Login failed (Network or Bad ID)
@@ -116,6 +123,9 @@ class KingshotBot:
                     failed_players.append(nickname)
                 
                 continue
+            
+            if profile['nickname'] != player['nickname']:
+                self.db.update_player_nickname(fid, profile['nickname'])
 
             # Sleep after login
             time.sleep(self.request_delay)
@@ -139,12 +149,12 @@ class KingshotBot:
                     consecutive_player_errors = 0 
                 
                 # CASE B : EXPIRED (Global)
-                elif err_code in [40007]:
+                elif err_code in [40007, 40017]:
                     logger.warning(f"Code {code} is EXPIRED. Skipping for everyone.")
                     known_expired_codes.add(code)
 
                 # CASE C : Player doesn't meet requirements (Level, etc)
-                elif err_code in [40006, 40017]:
+                elif err_code in [40006]:
                     logger.info(f"Player {nickname} does not meet requirements for Code {code}. Skipping.")
                 
                 # CASE C: ERROR (Network, Unknown, Not Login)
@@ -170,7 +180,7 @@ class KingshotBot:
             else:
                 pass
 
-        # 4. FINAL STATS
+# 4. FINAL STATS
         logger.info("--- Redemption Cycle Completed ---")
         logger.info(f"Players processed: total - {total_players_start}, skipped (Already Had All): {stats_skipped_full}, skipped (Errors/Dropped):  {stats_skipped_error}")
         
@@ -178,17 +188,25 @@ class KingshotBot:
             logger.info(f"   -> Failed Players: {', '.join(failed_players)}")
 
         redeem_counts = [v for k,v in stats_redemptions.items() if v > 0]
+        distribution = Counter(redeem_counts) if redeem_counts else {}
         
         if not redeem_counts:
             logger.info("   No new codes were redeemed for any player.")
         else:
-            distribution = Counter(redeem_counts)
             for count, num_players in sorted(distribution.items(), reverse=True):
                 p_text = "player" if num_players == 1 else "players"
                 c_text = "code" if count == 1 else "codes"
                 logger.info(f"   • {num_players} {p_text} redeemed {count} {c_text}")
                 
         logger.info("="*40 + "\n")
+
+        return {
+            "total_players": total_players_start,
+            "skipped_full": stats_skipped_full,
+            "skipped_error": stats_skipped_error,
+            "failed_players": failed_players,
+            "distribution": distribution
+        }
 
     def _check_pause(self, error_count):
         if error_count >= self.error_threshold:
