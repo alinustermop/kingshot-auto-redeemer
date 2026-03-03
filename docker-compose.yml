@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  kingshot-bot:
+    build: .
+    container_name: kingshot-redeemer
+    restart: unless-stopped
+    volumes:
+      # Mounts a local 'data' folder to the container's '/app/data' folder
+      - ./data:/app/data
+      # Mounts your secret constants file directly
+      - ./constants.py:/app/constants.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    environment:
+      # Forces the container to use UTC time natively
+      - TZ=UTC

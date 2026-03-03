@@ -1,0 +1,7 @@
+constants.py
+.env
+*.db
+__pycache__/
+*.pyc
+*.log
+.git/

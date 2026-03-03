@@ -149,12 +149,12 @@ class KingshotBot:
                     consecutive_player_errors = 0 
                 
                 # CASE B : EXPIRED (Global)
-                elif err_code in [40007, 40017]:
+                elif err_code in [40007]:
                     logger.warning(f"Code {code} is EXPIRED. Skipping for everyone.")
                     known_expired_codes.add(code)
 
                 # CASE C : Player doesn't meet requirements (Level, etc)
-                elif err_code in [40006]:
+                elif err_code in [40006, 40017]:
                     logger.info(f"Player {nickname} does not meet requirements for Code {code}. Skipping.")
                 
                 # CASE C: ERROR (Network, Unknown, Not Login)
