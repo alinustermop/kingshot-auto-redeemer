@@ -1,6 +1,7 @@
 import sys
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 import random
 from collections import defaultdict, deque, Counter
 from datetime import datetime, timedelta
@@ -9,12 +10,21 @@ from Database_Manager import DatabaseManager
 import constants
 
 # --- LOGGING SETUP ---
+logging.Formatter.converter = time.gmtime
+
+file_handler = RotatingFileHandler(
+    constants.LOG_FILE, 
+    maxBytes=5*1024*1024, # 5 MB per file
+    backupCount=3,        # Keep 3 old log files (15MB total max)
+    encoding='utf-8'
+)
+
 logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s | %(levelname)-8s | %(name)-4s | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
         handlers=[
-            logging.FileHandler(constants.LOG_FILE, encoding='utf-8'),
+            file_handler,
             logging.StreamHandler(sys.stdout)
         ]
 )
@@ -89,6 +99,8 @@ class KingshotBot:
 
             # 1. LOGIN (Get Player Info)
             profile = self.api.get_player_info(fid)
+            if profile['nickname'] != player['nickname']:
+                self.db.update_player_nickname(fid, profile['nickname'])
             
             if not profile:
                 # Login failed (Network or Bad ID)
@@ -127,12 +139,12 @@ class KingshotBot:
                     consecutive_player_errors = 0 
                 
                 # CASE B : EXPIRED (Global)
-                elif err_code in [40007]:
+                elif err_code in [40007, 40017]:
                     logger.warning(f"Code {code} is EXPIRED. Skipping for everyone.")
                     known_expired_codes.add(code)
 
                 # CASE C : Player doesn't meet requirements (Level, etc)
-                elif err_code in [40006, 40017]:
+                elif err_code in [40006]:
                     logger.info(f"Player {nickname} does not meet requirements for Code {code}. Skipping.")
                 
                 # CASE C: ERROR (Network, Unknown, Not Login)
@@ -215,14 +227,6 @@ class KingshotBot:
                 time.sleep(60)
  
 
-# For real use:
-# if __name__ == "__main__":
-#     bot = KingshotBot()
-#     bot.run_daily_loop()
-
 # For testing: 
 if __name__ == "__main__":
     bot = KingshotBot()
-    bot.db.show_full_table()
-    # print(bot.api.get_active_codes())
-    # bot.run_once()

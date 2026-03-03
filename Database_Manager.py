@@ -5,7 +5,7 @@ import constants
 class DatabaseManager:
     def __init__(self):
         self.logger = logging.getLogger("DB")
-        self.conn = sqlite3.connect(constants.DB_NAME)
+        self.conn = sqlite3.connect(constants.DB_NAME, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row 
         self.cursor = self.conn.cursor()
         self._create_tables()
@@ -90,12 +90,8 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
     
     def get_player(self, fid):
-            try:
-                self.cursor.execute('SELECT fid, nickname FROM players WHERE fid = ?', (fid,))
-                return self.cursor.fetchone()
-            except Exception as e:
-                self.logger.error(f"Database error fetching player {fid}: {e}")
-                return None
+        self.cursor.execute('SELECT fid, nickname FROM players WHERE fid = ?', (fid,))
+        return self.cursor.fetchone()
 
     def get_player_count(self):
         self.cursor.execute('SELECT COUNT(*) as count FROM players')
@@ -134,6 +130,51 @@ class DatabaseManager:
     def is_code_redeemed(self, fid, code):
         self.cursor.execute('SELECT 1 FROM redemptions WHERE fid = ? AND code = ?', (fid, code))
         return self.cursor.fetchone() is not None
+
+    def get_redeemed_codes(self):
+        self.cursor.execute('SELECT DISTINCT code FROM redemptions')
+        return [row['code'] for row in self.cursor.fetchall()]
+
+    def get_latest_redemption_info(self):
+        query = '''
+            SELECT code, redeemed_at 
+            FROM redemptions 
+            WHERE redeemed_at > datetime('now', '-1 day')
+            ORDER BY redeemed_at DESC
+        '''
+        try:
+            self.cursor.execute(query)
+            rows = self.cursor.fetchall()
+            
+            if not rows:
+                return None
+                
+            latest_timestamp = rows[0]['redeemed_at']
+            
+            unique_codes = []
+            for row in rows:
+                if row['code'] not in unique_codes:
+                    unique_codes.append(row['code'])
+            
+            return {
+                "timestamp": latest_timestamp,
+                "codes": unique_codes
+            }
+        except Exception as e:
+            self.logger.error(f"Error fetching latest session info: {e}")
+            return None
+
+    def update_player_nickname(self, fid, new_nickname):
+        try:
+            self.cursor.execute(
+                "UPDATE players SET nickname = ? WHERE fid = ?", 
+                (new_nickname, fid)
+            )
+            self.conn.commit()
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"Updated nickname for ID {fid} to: {new_nickname}")
+        except Exception as e:
+            self.logger.error(f"Database error updating nickname for {fid}: {e}")
 
     def close(self):
         self.conn.close()
