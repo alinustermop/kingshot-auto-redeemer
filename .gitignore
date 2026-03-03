@@ -2,7 +2,7 @@
 constants.py
 .env
 
-# Database file
+# Database file (don't upload your users' data!)
 *.db
 
 # Python cache

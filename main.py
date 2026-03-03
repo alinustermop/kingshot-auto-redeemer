@@ -121,16 +121,19 @@ class KingshotBot:
                 # CASE A: SUCCESS / ALREADY CLAIMED / MUTUALLY EXCLUSIVE
                 if status_code == 0 or err_code in [20000, 40008, 40011]:
                     if status_code == 0 or err_code == 20000:
-                        # Only count actual success as a "Redemption" for stats
                         stats_redemptions[fid] += 1
                     
                     self.db.log_successful_redemption(fid, code, result)
                     consecutive_player_errors = 0 
                 
                 # CASE B : EXPIRED (Global)
-                elif err_code == 40007:
+                elif err_code in [40007]:
                     logger.warning(f"Code {code} is EXPIRED. Skipping for everyone.")
                     known_expired_codes.add(code)
+
+                # CASE C : Player doesn't meet requirements (Level, etc)
+                elif err_code in [40006, 40017]:
+                    logger.info(f"Player {nickname} does not meet requirements for Code {code}. Skipping.")
                 
                 # CASE C: ERROR (Network, Unknown, Not Login)
                 else:
@@ -153,7 +156,7 @@ class KingshotBot:
                     stats_skipped_error += 1
                     failed_players.append(nickname)
             else:
-                pass # Player finished all codes successfully (or skipped them)
+                pass
 
         # 4. FINAL STATS
         logger.info("--- Redemption Cycle Completed ---")
@@ -162,16 +165,11 @@ class KingshotBot:
         if failed_players:
             logger.info(f"   -> Failed Players: {', '.join(failed_players)}")
 
-        # Count how many players got X codes
-        # We excluding players with 0s if they were counted in "Skipped Full"
-        # But if they needed codes and got 0 (due to expiry), they end up here with 0.
-        
         redeem_counts = [v for k,v in stats_redemptions.items() if v > 0]
         
         if not redeem_counts:
             logger.info("   No new codes were redeemed for any player.")
         else:
-            # Counter({1: 5, 3: 2}) -> 5 players got 1 code, 2 players got 3 codes
             distribution = Counter(redeem_counts)
             for count, num_players in sorted(distribution.items(), reverse=True):
                 p_text = "player" if num_players == 1 else "players"
@@ -217,8 +215,14 @@ class KingshotBot:
                 time.sleep(60)
  
 
+# For real use:
+# if __name__ == "__main__":
+#     bot = KingshotBot()
+#     bot.run_daily_loop()
+
+# For testing: 
 if __name__ == "__main__":
-        bot = KingshotBot()
-        # Choose what option you want to use:
-        # bot.run_daily_loop()
-        bot.run_once()
+    bot = KingshotBot()
+    bot.db.show_full_table()
+    # print(bot.api.get_active_codes())
+    # bot.run_once()

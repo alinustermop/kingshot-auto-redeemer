@@ -23,7 +23,7 @@ class KingshotAPI:
         return hashlib.md5(raw_string.encode("utf-8")).hexdigest()
 
     def get_player_info(self, fid):
-        # This function also is our "Login"
+        # This function also is "Login"  for redeeming
         time.sleep(self.request_delay)
 
         current_time = str(int(time.time() * 1000))
@@ -40,8 +40,21 @@ class KingshotAPI:
             data = response.json()
 
             if data.get("code") == 0:
-                self.logger.info(f"Player found: {data['data']['nickname']} (ID: {fid})")
-                return data['data']
+                player_data = data['data']
+                stove_lv = player_data.get('stove_lv_content', 0)
+                
+                if len(str(stove_lv)) <= 2:
+                    rendered_level = str(stove_lv)
+                else:
+                    try:
+                        tg_num = str(stove_lv).split('_')[-1].split('.')[0]
+                        rendered_level = f"TG-{tg_num}"
+                    except (IndexError, AttributeError):
+                        rendered_level = "TG-?"
+                player_data['rendered_level'] = rendered_level
+                
+                self.logger.info(f"Player found: {player_data['nickname']} (LVL: {rendered_level})")
+                return player_data
             
             self.logger.warning(f"Player {fid} is NOT found: {data.get('msg')}")
             return None

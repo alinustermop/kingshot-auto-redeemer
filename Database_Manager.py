@@ -8,9 +8,9 @@ class DatabaseManager:
         self.conn = sqlite3.connect(constants.DB_NAME)
         self.conn.row_factory = sqlite3.Row 
         self.cursor = self.conn.cursor()
-        self.create_tables()
+        self._create_tables()
 
-    def create_tables(self):
+    def _create_tables(self):
         try:
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS players (
@@ -89,6 +89,14 @@ class DatabaseManager:
         self.cursor.execute('SELECT 1 FROM players WHERE fid = ?', (fid,))
         return self.cursor.fetchone() is not None
     
+    def get_player(self, fid):
+            try:
+                self.cursor.execute('SELECT fid, nickname FROM players WHERE fid = ?', (fid,))
+                return self.cursor.fetchone()
+            except Exception as e:
+                self.logger.error(f"Database error fetching player {fid}: {e}")
+                return None
+
     def get_player_count(self):
         self.cursor.execute('SELECT COUNT(*) as count FROM players')
         return self.cursor.fetchone()['count']
@@ -108,6 +116,20 @@ class DatabaseManager:
 
         except Exception as e:
             self.logger.error(f"Database error saving player: {e}")
+
+    def _delete_player(self, fid):
+        try:
+            self.cursor.execute('DELETE FROM players WHERE fid = ?', (fid,))
+            self.conn.commit()
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"Deleted player with ID {fid}.")
+                return True
+            else:
+                self.logger.warning(f"No player found with ID {fid} to delete.")
+                return False
+        except Exception as e:
+            self.logger.error(f"Database error deleting player: {e}")
+            return False
 
     def is_code_redeemed(self, fid, code):
         self.cursor.execute('SELECT 1 FROM redemptions WHERE fid = ? AND code = ?', (fid, code))
