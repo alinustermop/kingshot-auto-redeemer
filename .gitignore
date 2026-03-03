@@ -1,5 +1,6 @@
 # Secret data
 constants.py
+constants_local.py
 .env
 
 # Database file
