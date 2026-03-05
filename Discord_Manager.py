@@ -4,7 +4,7 @@ from discord import app_commands
 import asyncio
 import constants
 from main import KingshotBot
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 intents = discord.Intents.default()
 intents.message_content = True 
@@ -75,6 +75,7 @@ async def help_command(interaction: discord.Interaction):
         "**/stats**: Show bot statistics and last 24h activity\n"
         "**/next**: See when the next auto-redemption cycle starts\n"
         "**/ping**: Check connection latency\n"
+        "**/redeem_for [id]**: Redeem all active codes for a player ID\n"
         "**/redeem_all**: Trigger a manual sync cycle (Owner only)\n"
         "**/logs**: View recent bot activity logs (Owner only)"
     )
@@ -85,6 +86,18 @@ async def help_command(interaction: discord.Interaction):
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
     await interaction.response.send_message(f"🏓 Pong! Latency: `{latency}ms`", ephemeral=True)
+
+@bot.command()
+async def sync(ctx):
+    if await bot.is_owner(ctx.author):
+        await ctx.send("Attempting to sync slash commands with Discord...")
+        try:
+            synced = await bot.tree.sync()
+            await ctx.send(f"Success! Synced {len(synced)} slash commands.")
+        except Exception as e:
+            await ctx.send(f"Sync failed: {e}")
+    else:
+        await ctx.send("You do not have permission to sync commands.")
 
 @bot.tree.command(name="find", description="Search for a player by ID")
 @app_commands.rename(fid="id")
@@ -257,6 +270,33 @@ async def next_cycle(interaction: discord.Interaction):
         await interaction.response.send_message(f"Next cycle in: `{str(remaining).split('.')[0]}`", ephemeral=True)
     else:
         await interaction.response.send_message("❌ Task not running.", ephemeral=True)
+
+@bot.tree.command(name="redeem_for", description="Redeem all active codes for a specific player ID")
+@app_commands.rename(fid="id")
+@app_commands.describe(fid="The player ID to redeem codes for")
+async def redeem_for(interaction: discord.Interaction, fid: str):
+    await interaction.response.defer(ephemeral=True)
+    
+    response = await asyncio.to_thread(ks_bot.redeem_for_player, fid)
+
+    if response["status"] == "error":
+        await interaction.followup.send(f"Error: {response['msg']}", ephemeral=True)
+        return
+
+    nickname = response["nickname"]
+    new_redeemed = response["redeemed_new"]
+    total = response["total_active"]
+    details = "\n".join(response["details"])
+
+    report = (
+        f"**Redemption Report for {nickname} ({fid})**\n"
+        f"Processed {total} active codes.\n"
+        f"Newly redeemed: {new_redeemed}\n\n"
+        f"**Details:**\n"
+        f"```\n{details}\n```"
+    )
+
+    await interaction.followup.send(report, ephemeral=True)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

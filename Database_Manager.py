@@ -178,5 +178,3 @@ class DatabaseManager:
 
     def close(self):
         self.conn.close()
-
-

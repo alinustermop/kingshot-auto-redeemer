@@ -49,6 +49,71 @@ class KingshotBot:
         self.pause_duration = 180  # Pause for 3 minutes (180s)
         self.request_delay = 5     # Wait 5s between requests to be safe
 
+    def redeem_for_player(self, fid):
+        logger.info(f"--- Starting redemption for ID: {fid} ---")
+        
+        # 1. Fetch all active codes
+        active_codes = self.api.get_active_codes()
+        if not active_codes:
+            return {"status": "error", "msg": "No active codes found at the moment."}
+        
+        # 2. Identify Player and Handle Login
+        player_record = self.db.get_player(fid)
+        needs_db_save = False
+        
+        if not player_record:
+            player_data = self.api.get_player_info(fid)
+            if not player_data:
+                return {"status": "error", "msg": f"Could not find a player with ID {fid}."}
+            nickname = player_data['nickname']
+            needs_db_save = True
+        else:
+            nickname = player_record['nickname']
+            player_data = self.api.get_player_info(fid)
+            if not player_data:
+                return {"status": "error", "msg": f"Login failed for {nickname} ({fid})."}
+            
+            if player_data['nickname'] != nickname:
+                self.db.update_player_nickname(fid, player_data['nickname'])
+                nickname = player_data['nickname']
+
+        if needs_db_save:
+            self.db._save_player_to_db(player_data)
+
+        # 3. Process every active code
+        results = []
+        redeemed_count = 0
+        
+        for code in active_codes:
+            if self.db.is_code_redeemed(fid, code):
+                results.append(f"{code}: Already redeemed")
+                continue
+
+            time.sleep(self.request_delay)
+            res = self.api.redeem_code(fid, code)
+            
+            status_code = res.get('code')
+            err_code = res.get('err_code')
+            msg = res.get('msg', 'Unknown Error')
+
+            if status_code == 0 or err_code in [20000, 40008, 40011]:
+                self.db.log_successful_redemption(fid, code, res)
+                results.append(f"{code}: Success")
+                redeemed_count += 1
+            else:
+                results.append(f"{code}: Failed - {msg}")
+                logger.warning(f"Targeted redeem failed for {fid} on {code}: {msg}")
+
+        logger.info(f"--- Finished redemption for {nickname} ---")
+        return {
+            "status": "success",
+            "nickname": nickname,
+            "fid": fid,
+            "total_active": len(active_codes),
+            "redeemed_new": redeemed_count,
+            "details": results
+        }
+
     def run_redemption_cycle(self):
         logger.info("--- Starting Redemption Cycle...")
 
@@ -180,7 +245,7 @@ class KingshotBot:
             else:
                 pass
 
-# 4. FINAL STATS
+    # 4. FINAL STATS
         logger.info("--- Redemption Cycle Completed ---")
         logger.info(f"Players processed: total - {total_players_start}, skipped (Already Had All): {stats_skipped_full}, skipped (Errors/Dropped):  {stats_skipped_error}")
         
