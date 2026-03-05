@@ -54,8 +54,8 @@ async def on_ready():
     await bot.tree.sync() 
     print(f"Logged in as {bot.user}")
     
-    # if not daily_redemption_task.is_running():
-    #     daily_redemption_task.start()
+    if not daily_redemption_task.is_running():
+        daily_redemption_task.start()
 
 # --- SLASH COMMANDS ---
 
