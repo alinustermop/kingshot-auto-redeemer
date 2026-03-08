@@ -29,10 +29,55 @@ class DatabaseManager:
                     FOREIGN KEY (fid) REFERENCES players (fid)
                 )
             ''')
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS guild_settings (
+                    guild_id INTEGER PRIMARY KEY,
+                    target_channel_id INTEGER
+                )
+            ''')
             self.conn.commit()
             self.logger.info("Database tables initialized successfully.")
         except sqlite3.Error as e:
             self.logger.error(f"Database initialization error: {e}")
+
+    def _set_guild_channel(self, guild_id, channel_id):
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO guild_settings (guild_id, target_channel_id) VALUES (?, ?)",
+                (guild_id, channel_id)
+            )
+            self.conn.commit()
+        except Exception as e:
+            self.logger.error(f"Error setting guild channel: {e}")
+
+    def get_all_target_channels(self):
+        try:
+            self.cursor.execute("SELECT target_channel_id FROM guild_settings")
+            return [row['target_channel_id'] for row in self.cursor.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Error fetching target channels: {e}")
+            return []
+
+    def _delete_guild_channel(self, guild_id):
+        try:
+            self.cursor.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Error deleting guild channel: {e}")
+            return False
+
+    def get_all_registrations(self):
+        try:
+            self.cursor.execute("SELECT guild_id, target_channel_id FROM guild_settings")
+            return self.cursor.fetchall()
+        except Exception as e:
+            self.logger.error(f"Error fetching all registrations: {e}")
+            return []
+
+    def is_guild_registered(self, guild_id):
+        self.cursor.execute("SELECT 1 FROM guild_settings WHERE guild_id = ?", (guild_id,))
+        return self.cursor.fetchone() is not None
 
     def show_all_players(self):
         self.cursor.execute('SELECT fid, nickname FROM players')

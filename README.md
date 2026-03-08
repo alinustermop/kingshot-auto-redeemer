@@ -16,17 +16,6 @@ An automated ETL and state management tool for managing and redeeming gift codes
 * **Libraries**: `requests` (API interaction), `hashlib` (MD5 Request Signing), `logging` (Monitoring).
 ## System Commands:
 The system is managed through a suite of slash commands for real-time data management via Discord-bot:
-* **/find [id]**: Search for a player and check if they are in the list
-* **/add [id]**: Add a new player to the auto-redeem list
-* **/delete [id]**: Remove a player from the list
-* **/history [id]**: See which codes a player has already used
-* **/list**: Show all registered players (Admins only)
-* **/stats**: Show bot statistics and last 24h activity
-* **/next**: See when the next auto-redemption cycle starts
-* **/ping**: Check connection latency
-* **/redeem_for [id]**: Redeem all active codes for a player ID
-* **/redeem_all**: Trigger a manual sync cycle (Owner only)
-* **/logs**: View recent bot activity logs (Owner only)
 ## Security & Configuration
 * **Request Signing**: The system uses MD5 hashing for authentication signatures.
 * **Configuration**: Sensitive data, including the Discord token and API SALT, must be provided in a constants.py file based on the provided template.
@@ -35,6 +24,7 @@ The system is managed through a suite of slash commands for real-time data manag
 The system maintains a relational structure to ensure data integrity:
 * **Players Table**: Stores unique player identifiers (FID) and nicknames.
 * **Redemptions Table**: Tracks specific code successes per player with unique constraints to prevent data duplication.
+* **Guild Settings Table**: Maps Discord Guild IDs to specific Channel IDs for automated broadcasting.
 ## Project Structure
 * `main.py`: Core orchestration logic and redemption cycle management.
 * `API_Manager.py`: Handles HTTP requests, authentication signatures, and API interactions.
@@ -47,7 +37,9 @@ The system maintains a relational structure to ensure data integrity:
 3. Configure `constants.py` based on the provided template.
 4. Edit to choose the preferred run option in `main.py` (`run_once()` or `run_daily_loop()`) and run the automation.
 **Discord Integration**:
-* **Existing Instance**: Add the managed bot to your server using the [link](https://discord.com/oauth2/authorize?client_id=1478083799890792448).
+1. Add the managed bot to your server using the [link](https://discord.com/oauth2/authorize?client_id=1478083799890792448).
+2. Use `/set_channel` in the desired channel to begin receiving reports.
+3. (Owner only) Use `/schedule_start` to activate the 24-hour automation.
 **Self-Hosting (Docker/GCP)**:
 1. Ensure Docker and Docker Compose are installed.
 2. Create your `constants.py` file with your specific `DISCORD_TOKEN` and `SALT`.
@@ -57,6 +49,22 @@ docker-compose up -d --build
 
 ```
 4. The system will automatically initialize the SQLite database and log files within the persistent `/app/data` volume.
-
+### Player Management
+* **/find [id]**: Search for a player and check if they are in the list.
+* **/add [id]**: Add a new player to the auto-redeem list.
+* **/delete [id]**: Remove a player from the list.
+* **/history [id]**: See which codes a player has already used.
+* **/redeem_for [id]**: Instantly redeem all active codes for a specific player ID (Ephemeral).
+### Server & Report Configuration (Admin Only)
+* **/set_channel**: Designates the current channel to receive automated redemption reports.
+* **/unset_channel**: Removes the current server from the automated report list.
+* **/list_players**: Show all registered players in the database.
+### System Control (Owner Only)
+* **/schedule_start**: Enables the automatic 24-hour redemption loop.
+* **/schedule_stop**: Disables the automatic 24-hour redemption loop.
+* **/redeem_all**: Trigger an immediate manual sync cycle for all players.
+* **/list_channels**: View all Discord servers and channels currently registered for reports.
+* **/logs**: View recent bot activity logs.
+* **/stats**: Show bot statistics and last 24h activity.
 ## Disclaimer
 This project is for educational purposes only. Users are responsible for ensuring compliance with the game's terms of service.
