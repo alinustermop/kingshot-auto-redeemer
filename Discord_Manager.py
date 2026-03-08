@@ -240,7 +240,7 @@ async def delete(interaction: discord.Interaction, fid: str):
 
 @bot.tree.command(name="list_players", description="Show all registered players")
 @app_commands.check(is_bot_owner)
-async def list_players(interaction: discord.Interaction):
+async def list_registered_players(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     players = ks_bot.db.show_all_players()
     if not players:
@@ -383,12 +383,16 @@ async def list_channels(interaction: discord.Interaction):
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("❌ Admin permissions required.", ephemeral=True)
+        message = "❌ You do not have the required Admin permissions."
     elif isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message("❌ Authorized users only.", ephemeral=True)
+        message = "❌ Authorized users only (Bot Owner check failed)."
     else:
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ Unexpected error.", ephemeral=True)
+        message = f"❌ Unexpected error: {error}"
+        logging.getLogger("BOT").error(f"Command Error: {error}")
 
+    if interaction.response.is_done():
+        await interaction.followup.send(message, ephemeral=True)
+    else:
+        await interaction.response.send_message(message, ephemeral=True)
 if __name__ == "__main__":
     bot.run(constants.DISCORD_TOKEN)
