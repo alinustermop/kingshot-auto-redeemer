@@ -16,7 +16,9 @@ ks_bot = KingshotBot()
 # --- CUSTOM CHECKS ---
 
 async def is_bot_owner(interaction: discord.Interaction) -> bool:
-    return await interaction.client.is_owner(interaction.user)
+    if await interaction.client.is_owner(interaction.user):
+        return True
+    return False
 
 # --- INTERACTIVE VIEW ---
 
@@ -36,6 +38,44 @@ class ConfirmView(discord.ui.View):
         self.value = False
         self.stop()
         await interaction.response.defer()
+
+class PlayerPagination(discord.ui.View):
+    def __init__(self, players, per_page=15):
+        super().__init__(timeout=60)
+        self.players = players
+        self.per_page = per_page
+        self.current_page = 0
+        self.total_pages = (len(players) - 1) // per_page + 1
+
+    def create_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        page_players = self.players[start:end]
+
+        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`)" for p in page_players])
+        embed = discord.Embed(
+            title=f"Registered Players ({len(self.players)} total)", 
+            description=description, 
+            color=0x66ccff
+        )
+        embed.set_footer(text=f"Page {self.current_page + 1} of {self.total_pages}")
+        return embed
+
+    @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        else:
+            await interaction.response.send_message("You are on the first page.", ephemeral=True)
+
+    @discord.ui.button(label="Next ➡️", style=discord.ButtonStyle.gray)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        else:
+            await interaction.response.send_message("You are on the last page.", ephemeral=True)
 
 # --- BACKGROUND TASKS ---
 
@@ -238,18 +278,17 @@ async def delete(interaction: discord.Interaction, fid: str):
     else:
         await message.edit(content="Action cancelled.", embed=None, view=None)
 
-@bot.tree.command(name="list_players", description="Show all registered players")
+@bot.tree.command(name="list_players", description="Show all registered players with pagination")
 @app_commands.check(is_bot_owner)
 async def list_registered_players(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    players = ks_bot.db.show_all_players()
+    
+    players = ks_bot.db.show_all_players() #
     if not players:
         await interaction.followup.send("The list is empty.", ephemeral=True)
         return
-
-    description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`)" for p in players])
-    embed = discord.Embed(title="Registered Players", description=description, color=0x66ccff)
-    await interaction.followup.send(embed=embed, ephemeral=True)
+    view = PlayerPagination(players, per_page=20)
+    await interaction.followup.send(embed=view.create_embed(), view=view, ephemeral=True)
 
 @bot.tree.command(name="stats", description="View bot statistics")
 async def stats(interaction: discord.Interaction):
