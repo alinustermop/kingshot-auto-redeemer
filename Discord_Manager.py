@@ -394,5 +394,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         await interaction.followup.send(message, ephemeral=True)
     else:
         await interaction.response.send_message(message, ephemeral=True)
+
 if __name__ == "__main__":
     bot.run(constants.DISCORD_TOKEN)
