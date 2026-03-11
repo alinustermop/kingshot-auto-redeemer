@@ -92,6 +92,8 @@ class KingshotAPI:
                  self.logger.info(f"Redemption SUCCESS for {fid} - Code: {cdk}")
             elif result.get("err_code") == 40008:
                 self.logger.info(f"Redemption SKIPPED for {fid} - Code: {cdk} (Already Redeeemed)")
+            elif result.get("err_code") == 40011:
+                self.logger.info(f"Redemption SKIPPED for {fid} - Code: {cdk} (Equivalent was already redeemed)") 
             else:
                 self.logger.warning(f"Redemption FAILED for {fid} - Code: {cdk} | Msg: {result.get('msg')}")
 

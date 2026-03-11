@@ -31,13 +31,19 @@ class ConfirmView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
         self.stop()
-        await interaction.response.defer() 
+        try:
+            await interaction.response.edit_message(view=None) 
+        except discord.errors.NotFound:
+            pass 
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
         self.stop()
-        await interaction.response.defer()
+        try:
+            await interaction.response.edit_message(view=None)
+        except discord.errors.NotFound:
+            pass
 
 class PlayerPagination(discord.ui.View):
     def __init__(self, players, per_page=15):
