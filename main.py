@@ -69,12 +69,16 @@ class KingshotBot:
             needs_db_save = True
         else:
             nickname = player_record['nickname']
+            try:
+                kid = player_record['kid']
+            except (IndexError, KeyError):
+                kid = None
             player_data = self.api.get_player_info(fid)
             if not player_data:
                 return {"status": "error", "msg": f"Login failed for {nickname} ({fid})."}
             
-            if player_data['nickname'] != nickname:
-                self.db.update_player_nickname(fid, player_data['nickname'])
+            if player_data['nickname'] != nickname or player_data['kid'] != kid:
+                self.db._update_player_info(fid, player_data['nickname'], player_data['kid'])
                 nickname = player_data['nickname']
 
         if needs_db_save:
@@ -189,8 +193,8 @@ class KingshotBot:
                 
                 continue
             
-            if profile['nickname'] != player['nickname']:
-                self.db.update_player_nickname(fid, profile['nickname'])
+            if profile['nickname'] != player['nickname'] or profile['kid'] != player['kid']:
+                self.db._update_player_info(fid, profile['nickname'], profile['kid'])
 
             # Sleep after login
             time.sleep(self.request_delay)

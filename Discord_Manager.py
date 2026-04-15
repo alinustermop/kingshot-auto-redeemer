@@ -58,7 +58,7 @@ class PlayerPagination(discord.ui.View):
         end = start + self.per_page
         page_players = self.players[start:end]
 
-        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`)" for p in page_players])
+        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`) *{p['kid']}*" for p in page_players])
         embed = discord.Embed(
             title=f"Registered Players ({len(self.players)} total)", 
             description=description, 
@@ -146,27 +146,26 @@ async def on_ready():
 @bot.tree.command(name="help", description="Show all available commands")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🤖 Kingshot Bot Commands",
-        description="Here is a list of everything I can do:",
         color=0x66ccff
     )
     commands_text = (
             "**/find [id]**: Search for a player and check if they are in the list\n"
             "**/add [id]**: Add a new player to the auto-redeem list\n"
             "**/delete [id]**: Remove a player from the list\n"
-            "**/history [id]**: See which codes a player has already used\n"
-            "**/stats**: Show bot statistics and last 24h activity\n"
+            "**/history [id]**: See redeemed codes for a player\n"
+            "**/stats**: Show bot statistics\n"
             "**/next**: See when the next auto-redemption cycle starts\n"
-            "**/ping**: Check connection latency\n"
+            "**/servers_stats**: Show player distribution across servers\n"
             "**/redeem_for [id]**: Redeem all active codes for a specific player ID\n"
-            "**/redeem_all**: Trigger a manual sync cycle (Owner only)\n"
-            "**/set_channel**: Set this channel for redemption reports (Admins only)\n"
-            "**/unset_channel**: Stop reports for this server (Admins only)\n"
-            "**/list_players**: Show all registered players (Owner only)\n"
-            "**/list_channels**: List all registered servers/channels (Owner only)\n"
-            "**/schedule_start**: Start the 24h automatic loop (Owner only)\n"
-            "**/schedule_stop**: Stop the 24h automatic loop (Owner only)\n"
-            "**/logs**: View recent bot activity logs (Owner only)"
+            "**/redeem_all**: Trigger a manual sync cycle *(Owner)*\n"
+            "**/set_channel**: Set this channel for redemption reports *(Admins)*\n"
+            "**/unset_channel**: Stop reports for this server *(Admins)*\n"
+            "**/list_players**: Show all registered players *(Owner)*\n"
+            "**/list_channels**: List all registered discord channels *(Owner)*\n"
+            "**/list_server_players [kid]**: List all players in a specific server *(Owner)*\n"
+            "**/schedule_start**: Start the 24h automatic loop *(Owner)*\n"
+            "**/schedule_stop**: Stop the 24h automatic loop *(Owner)*\n"
+            "**/logs**: View recent bot activity logs *(Owner)*"
         )
     embed.add_field(name="Available Commands", value=commands_text, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -215,8 +214,8 @@ async def find(interaction: discord.Interaction, fid: str):
     player_data = ks_bot.api.get_player_info(fid)
     if player_data:
         existing_player = ks_bot.db.get_player(fid)
-        if existing_player and existing_player['nickname'] != player_data['nickname']:
-            ks_bot.db.update_player_nickname(fid, player_data['nickname'])
+        if existing_player and (existing_player['nickname'] != player_data['nickname'] or existing_player['kid'] != player_data['kid']):
+            ks_bot.db._update_player_info(fid, player_data['nickname'], player_data['kid'])
 
         embed = discord.Embed(title="Player Found:", color=0x66ccff)
         embed.set_thumbnail(url=player_data.get('avatar_image', ''))
@@ -299,12 +298,14 @@ async def list_registered_players(interaction: discord.Interaction):
 @bot.tree.command(name="stats", description="View bot statistics")
 async def stats(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    count = ks_bot.db.get_player_count()
+    layers_count = ks_bot.db.get_player_count()
+    kingdom_count = ks_bot.db.get_kingdom_count()
     all_codes = ks_bot.db.get_redeemed_codes()
     session_info = ks_bot.db.get_latest_redemption_info()
     
     embed = discord.Embed(title="System Statistics", color=0x66ccff)
-    embed.add_field(name="Registered Players", value=str(count), inline=True)
+    embed.add_field(name="Registered Players", value=str(layers_count), inline=True)
+    embed.add_field(name="Kingdoms", value=str(kingdom_count), inline=True)
     embed.add_field(name="Total Codes Redeemed", value=str(len(all_codes)), inline=True)
     
     if session_info:
@@ -424,6 +425,41 @@ async def list_channels(interaction: discord.Interaction):
 
     embed = discord.Embed(title="Registered Report Channels", description=description, color=0x66ccff)
     await interaction.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="servers_stats", description="Show player distribution across servers (Owner only)")
+@app_commands.check(is_bot_owner)
+async def servers_stats(interaction: discord.Interaction):
+    stats, total = ks_bot.db.get_servers_stats()
+    
+    if not stats:
+        await interaction.response.send_message("No player data available.", ephemeral=True)
+        return
+
+    description = ""
+    for row in stats:
+        server_id = row['kid'] if row['kid'] is not None else "Unknown"
+        description += f"**{server_id}**: {row['count']} player(s)\n"
+    
+    description += f"\n**Total players**: {total} players"
+    
+    embed = discord.Embed(title="📊 Server Distribution", description=description, color=0x66ccff)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="list_server_players", description="List all players in a specific server (Owner only)")
+@app_commands.describe(kid="The Kingdom/Server ID to filter by")
+@app_commands.check(is_bot_owner)
+async def list_server_players(interaction: discord.Interaction, kid: int):
+    players = ks_bot.db.get_players_by_server(kid)
+    
+    if not players:
+        await interaction.response.send_message(f"No players found for Server `{kid}`.", ephemeral=True)
+        return
+
+    view = PlayerPagination(players)
+    embed = view.create_embed()
+    embed.title = f"Players in Server {kid}"
+    
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

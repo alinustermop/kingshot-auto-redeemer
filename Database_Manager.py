@@ -16,6 +16,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS players (
                     fid INTEGER PRIMARY KEY,
                     nickname TEXT,
+                    kid INTEGER,
                     added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -50,14 +51,6 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Error setting guild channel: {e}")
 
-    def get_all_target_channels(self):
-        try:
-            self.cursor.execute("SELECT target_channel_id FROM guild_settings")
-            return [row['target_channel_id'] for row in self.cursor.fetchall()]
-        except Exception as e:
-            self.logger.error(f"Error fetching target channels: {e}")
-            return []
-
     def _delete_guild_channel(self, guild_id):
         try:
             self.cursor.execute("DELETE FROM guild_settings WHERE guild_id = ?", (guild_id,))
@@ -67,6 +60,48 @@ class DatabaseManager:
             self.logger.error(f"Error deleting guild channel: {e}")
             return False
 
+    def _save_player_to_db(self, data):
+        try:
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO players (fid, nickname, kid) VALUES (?, ?, ?)", 
+                (data['fid'], data['nickname'], data['kid'])
+            )
+            self.conn.commit()
+
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"New player saved: {data['nickname']}")
+            else:
+                self.logger.info(f"Player already exists: {data['nickname']} (Skipped)")
+
+        except Exception as e:
+            self.logger.error(f"Database error saving player: {e}")
+
+    def _delete_player(self, fid):
+        try:
+            self.cursor.execute('DELETE FROM players WHERE fid = ?', (fid,))
+            self.conn.commit()
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"Deleted player with ID {fid}.")
+                return True
+            else:
+                self.logger.warning(f"No player found with ID {fid} to delete.")
+                return False
+        except Exception as e:
+            self.logger.error(f"Database error deleting player: {e}")
+            return False
+
+    def _update_player_info(self, fid, new_nickname, new_kid):
+        try:
+            self.cursor.execute(
+                "UPDATE players SET nickname = ?, kid = ? WHERE fid = ?", 
+                (new_nickname, new_kid, fid)
+            )
+            self.conn.commit()
+            if self.cursor.rowcount > 0:
+                self.logger.info(f"Updated player info for ID {fid}")
+        except Exception as e:
+            self.logger.error(f"Database error updating player info for {fid}: {e}")
+
     def get_all_registrations(self):
         try:
             self.cursor.execute("SELECT guild_id, target_channel_id FROM guild_settings")
@@ -75,12 +110,20 @@ class DatabaseManager:
             self.logger.error(f"Error fetching all registrations: {e}")
             return []
 
+    def get_all_target_channels(self):
+        try:
+            self.cursor.execute("SELECT target_channel_id FROM guild_settings")
+            return [row['target_channel_id'] for row in self.cursor.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Error fetching target channels: {e}")
+            return []
+
     def is_guild_registered(self, guild_id):
         self.cursor.execute("SELECT 1 FROM guild_settings WHERE guild_id = ?", (guild_id,))
         return self.cursor.fetchone() is not None
 
     def show_all_players(self):
-        self.cursor.execute('SELECT fid, nickname FROM players')
+        self.cursor.execute('SELECT fid, nickname, kid FROM players')
         return self.cursor.fetchall()
     
     def get_all_fids(self):
@@ -135,46 +178,28 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
     
     def get_player(self, fid):
-        self.cursor.execute('SELECT fid, nickname FROM players WHERE fid = ?', (fid,))
+        self.cursor.execute('SELECT fid, nickname, kid FROM players WHERE fid = ?', (fid,))
         return self.cursor.fetchone()
 
     def get_player_count(self):
         self.cursor.execute('SELECT COUNT(*) as count FROM players')
         return self.cursor.fetchone()['count']
-
-    def _save_player_to_db(self, data):
-        try:
-            self.cursor.execute(
-                "INSERT OR IGNORE INTO players (fid, nickname) VALUES (?, ?)", 
-                (data['fid'], data['nickname'])
-            )
-            self.conn.commit()
-
-            if self.cursor.rowcount > 0:
-                self.logger.info(f"New player saved: {data['nickname']}")
-            else:
-                self.logger.info(f"Player already exists: {data['nickname']} (Skipped)")
-
-        except Exception as e:
-            self.logger.error(f"Database error saving player: {e}")
-
-    def _delete_player(self, fid):
-        try:
-            self.cursor.execute('DELETE FROM players WHERE fid = ?', (fid,))
-            self.conn.commit()
-            if self.cursor.rowcount > 0:
-                self.logger.info(f"Deleted player with ID {fid}.")
-                return True
-            else:
-                self.logger.warning(f"No player found with ID {fid} to delete.")
-                return False
-        except Exception as e:
-            self.logger.error(f"Database error deleting player: {e}")
-            return False
+    
+    def get_kingdom_count(self):
+        self.cursor.execute('SELECT COUNT(DISTINCT kid) as count FROM players')
+        return self.cursor.fetchone()['count']
 
     def is_code_redeemed(self, fid, code):
         self.cursor.execute('SELECT 1 FROM redemptions WHERE fid = ? AND code = ?', (fid, code))
         return self.cursor.fetchone() is not None
+
+    def get_servers_stats(self):
+        self.cursor.execute("SELECT kid, COUNT(fid) as player_count FROM players GROUP BY kid ORDER BY player_count DESC")
+        return self.cursor.fetchall()
+
+    def get_players_by_kid(self, kid):
+        self.cursor.execute("SELECT fid, nickname, FROM players WHERE kid = ?", (kid,))
+        return self.cursor.fetchall()
 
     def get_redeemed_codes(self):
         self.cursor.execute('SELECT DISTINCT code FROM redemptions')
@@ -208,18 +233,6 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Error fetching latest session info: {e}")
             return None
-
-    def update_player_nickname(self, fid, new_nickname):
-        try:
-            self.cursor.execute(
-                "UPDATE players SET nickname = ? WHERE fid = ?", 
-                (new_nickname, fid)
-            )
-            self.conn.commit()
-            if self.cursor.rowcount > 0:
-                self.logger.info(f"Updated nickname for ID {fid} to: {new_nickname}")
-        except Exception as e:
-            self.logger.error(f"Database error updating nickname for {fid}: {e}")
 
     def close(self):
         self.conn.close()

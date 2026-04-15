@@ -22,7 +22,7 @@ The system is managed through a suite of slash commands for real-time data manag
 * **Note on Sensitive Data**: The SALT required for request signing was discovered through public sources. Out of respect for the service providers, it is not included in this repository. Users must provide their own SALT in the constants.py file.
 ##  Data Architecture
 The system maintains a relational structure to ensure data integrity:
-* **Players Table**: Stores unique player identifiers (FID) and nicknames.
+* **Players Table**: Stores unique player identifiers (FID), nicknames and kindgom identifiers (KID).
 * **Redemptions Table**: Tracks specific code successes per player with unique constraints to prevent data duplication.
 * **Guild Settings Table**: Maps Discord Guild IDs to specific Channel IDs for automated broadcasting.
 ## Project Structure
