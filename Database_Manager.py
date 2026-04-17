@@ -197,8 +197,8 @@ class DatabaseManager:
         self.cursor.execute("SELECT kid, COUNT(fid) as player_count FROM players GROUP BY kid ORDER BY player_count DESC")
         return self.cursor.fetchall()
 
-    def get_players_by_kid(self, kid):
-        self.cursor.execute("SELECT fid, nickname, FROM players WHERE kid = ?", (kid,))
+    def get_players_by_server(self, kid):
+        self.cursor.execute("SELECT fid, nickname, kid FROM players WHERE kid = ?", (kid,))
         return self.cursor.fetchall()
 
     def get_redeemed_codes(self):

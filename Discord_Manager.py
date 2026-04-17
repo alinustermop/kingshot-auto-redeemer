@@ -426,10 +426,10 @@ async def list_channels(interaction: discord.Interaction):
     embed = discord.Embed(title="Registered Report Channels", description=description, color=0x66ccff)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="servers_stats", description="Show player distribution across servers (Owner only)")
-@app_commands.check(is_bot_owner)
+@bot.tree.command(name="servers_stats", description="Show player distribution across servers")
 async def servers_stats(interaction: discord.Interaction):
-    stats, total = ks_bot.db.get_servers_stats()
+    stats = ks_bot.db.get_servers_stats()
+    total = ks_bot.db.get_player_count()
     
     if not stats:
         await interaction.response.send_message("No player data available.", ephemeral=True)
@@ -438,7 +438,7 @@ async def servers_stats(interaction: discord.Interaction):
     description = ""
     for row in stats:
         server_id = row['kid'] if row['kid'] is not None else "Unknown"
-        description += f"**{server_id}**: {row['count']} player(s)\n"
+        description += f"**{server_id}**: {row['player_count']} player(s)\n"
     
     description += f"\n**Total players**: {total} players"
     
