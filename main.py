@@ -217,8 +217,8 @@ class KingshotBot:
                     self.db.log_successful_redemption(fid, code, result)
                     consecutive_player_errors = 0 
                 
-                # CASE B : EXPIRED (Global)
-                elif err_code in [40007]:
+                # CASE B : EXPIRED (Global) or Claim limit reached
+                elif err_code in [40007, 40005]:
                     logger.warning(f"Code {code} is EXPIRED. Skipping for everyone.")
                     known_expired_codes.add(code)
 
