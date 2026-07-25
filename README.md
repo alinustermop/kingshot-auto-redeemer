@@ -1,4 +1,8 @@
 # Kingshot Auto-Redeemer
+🩷🩷🩷 \
+If you want to support the development and maintenance of this bot, you can do it by sending a little smth [here](https://send.monobank.ua/jar/3Chrj76iKB) or `4874 1000 2834 7972` \
+🩷🩷🩷
+---
 An automated ETL and state management tool for managing and redeeming gift codes for the game Kingshot.
 ## Key Features:
 * **Automated ETL Pipeline**: Programmatically interfaces with external APIs to fetch active gift codes and validate player account state in real-time.
