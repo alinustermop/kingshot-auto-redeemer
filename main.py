@@ -47,7 +47,7 @@ class KingshotBot:
         self.db = DatabaseManager()
         self.error_threshold = 5   # Pause after 5 consecutive unknown errors
         self.pause_duration = 180  # Pause for 3 minutes (180s)
-        self.request_delay = 5     # Wait 5s between requests to be safe
+        self.request_delay = 5     # Wait 5s between requests
 
     def redeem_for_player(self, fid):
         logger.info(f"--- Starting redemption for ID: {fid} ---")
@@ -55,36 +55,15 @@ class KingshotBot:
         # 1. Fetch all active codes
         active_codes = self.api.get_active_codes()
         if not active_codes:
+
             return {"status": "error", "msg": "No active codes found at the moment."}
-        
         # 2. Identify Player and Handle Login
         player_record = self.db.get_player(fid)
-        needs_db_save = False
-        
         if not player_record:
-            player_data = self.api.get_player_info(fid)
-            if not player_data:
-                return {"status": "error", "msg": f"Could not find a player with ID {fid}."}
-            nickname = player_data['nickname']
-            needs_db_save = True
-        else:
-            nickname = player_record['nickname']
-            try:
-                kid = player_record['kid']
-            except (IndexError, KeyError):
-                kid = None
-            player_data = self.api.get_player_info(fid)
-            if not player_data:
-                return {"status": "error", "msg": f"Login failed for {nickname} ({fid})."}
-            
-            if player_data['nickname'] != nickname or player_data['kid'] != kid:
-                self.db._update_player_info(fid, player_data['nickname'], player_data['kid'])
-                nickname = player_data['nickname']
+            return {"status": "error", "msg": f"Player with ID {fid} not found in database. Please add them first using /add."}
 
-        if needs_db_save:
-            self.db._save_player_to_db(player_data)
-
-        # 3. Process every active code
+        nickname = player_record['nickname']
+        kid = player_record['kid']
         results = []
         redeemed_count = 0
         
@@ -94,7 +73,7 @@ class KingshotBot:
                 continue
 
             time.sleep(self.request_delay)
-            res = self.api.redeem_code(fid, code)
+            res = self.api.redeem_code(fid, kid, code)
             
             status_code = res.get('code')
             err_code = res.get('err_code')
@@ -121,11 +100,14 @@ class KingshotBot:
     def run_redemption_cycle(self):
         logger.info("--- Starting Redemption Cycle...")
 
-        # 1. Fetch Active Codes
         active_codes = self.api.get_active_codes()
         if not active_codes:
             logger.info("No active codes found. Ending cycle.")
             return
+
+        # Check for newly discovered codes
+        known_codes = set(self.db.get_redeemed_codes())
+        new_codes_found = [c for c in active_codes if c not in known_codes]
 
         # 2. Fetch Players
         players = self.db.show_all_players()
@@ -135,13 +117,12 @@ class KingshotBot:
 
         # 3. Create Queue
         queue = deque([(p, 0) for p in players])
-        
+
         # Statistic Trackers 
-        stats_redemptions = defaultdict(int) # {fid: count_of_new_codes}
+        stats_redemptions = defaultdict(int)
         stats_skipped_full = 0   # Players who needed 0 codes
         stats_skipped_error = 0  # Players dropped due to max retries
         failed_players = []      # List of names who failed
-
 
         # Operational Trackers
         consecutive_player_errors = 0
@@ -155,6 +136,7 @@ class KingshotBot:
             player, retries = queue.popleft()
             fid = player['fid']
             nickname = player['nickname']
+            kid = player['kid']
 
             codes_to_try = []
 
@@ -175,37 +157,10 @@ class KingshotBot:
                     logger.info(f"Skipping {nickname}: All codes already redeemed.")
                 continue
 
-            # 1. LOGIN (Get Player Info)
-            profile = self.api.get_player_info(fid)
-            
-            if not profile:
-                # Login failed (Network or Bad ID)
-                consecutive_player_errors += 1
-
-                if retries < 2: # Max 3 attempts (0, 1, 2)
-                    logger.warning(f"Login failed for {nickname}. Re-queueing (Attempt {retries+1}/3).")
-                    queue.append((player, retries + 1))
-                    self._check_pause(consecutive_player_errors)
-                else:
-                    logger.error(f"Dropping {nickname} after 3 failed login attempts.")
-                    stats_skipped_error += 1
-                    failed_players.append(nickname)
-                
-                continue
-            
-            if profile['nickname'] != player['nickname'] or profile['kid'] != player['kid']:
-                self.db._update_player_info(fid, profile['nickname'], profile['kid'])
-
-            # Sleep after login
-            time.sleep(self.request_delay)
-
-            # 2. REDEEM CODES
             player_had_error = False
             
             for code in codes_to_try:
-
-                # Call API
-                result = self.api.redeem_code(fid, code)
+                result = self.api.redeem_code(fid, kid, code)
                 err_code = result.get('err_code')
                 status_code = result.get('code')
                 
@@ -226,7 +181,7 @@ class KingshotBot:
                 elif err_code in [40006, 40017]:
                     logger.info(f"Player {nickname} does not meet requirements for Code {code}. Skipping.")
                 
-                # CASE C: ERROR (Network, Unknown, Not Login)
+                # CASE D: ERROR (Network, Unknown, Not Login)
                 else:
                     msg = result.get('msg', 'Unknown')
                     logger.warning(f"Failed {nickname} on {code}: {msg} (Err: {err_code})")
@@ -246,35 +201,20 @@ class KingshotBot:
                     logger.error(f"Dropping {nickname} after 3 failed attempts.")
                     stats_skipped_error += 1
                     failed_players.append(nickname)
-            else:
-                pass
 
     # 4. FINAL STATS
         logger.info("--- Redemption Cycle Completed ---")
-        logger.info(f"Players processed: total - {total_players_start}, skipped (Already Had All): {stats_skipped_full}, skipped (Errors/Dropped):  {stats_skipped_error}")
         
-        if failed_players:
-            logger.info(f"   -> Failed Players: {', '.join(failed_players)}")
-
-        redeem_counts = [v for k,v in stats_redemptions.items() if v > 0]
+        redeem_counts = [v for k, v in stats_redemptions.items() if v > 0]
         distribution = Counter(redeem_counts) if redeem_counts else {}
         
-        if not redeem_counts:
-            logger.info("   No new codes were redeemed for any player.")
-        else:
-            for count, num_players in sorted(distribution.items(), reverse=True):
-                p_text = "player" if num_players == 1 else "players"
-                c_text = "code" if count == 1 else "codes"
-                logger.info(f"   • {num_players} {p_text} redeemed {count} {c_text}")
-                
-        logger.info("="*40 + "\n")
-
         return {
             "total_players": total_players_start,
             "skipped_full": stats_skipped_full,
             "skipped_error": stats_skipped_error,
             "failed_players": failed_players,
-            "distribution": distribution
+            "distribution": distribution,
+            "new_codes": new_codes_found
         }
 
     def _check_pause(self, error_count):
@@ -289,31 +229,5 @@ class KingshotBot:
             logger.info("Stopped by user.")
             sys.exit()
 
-    def run_daily_loop(self):
-        logger.info("Bot started in DAILY SCHEDULE mode")
-        
-        while True:
-            try:
-                self.run_redemption_cycle()
-
-                # Calculate Sleep (24h +/- 60 mins jitter)
-                jitter = random.randint(-3600, 3600)
-                sleep_seconds = (24 * 3600) + jitter
-                
-                next_run = datetime.now() + timedelta(seconds=sleep_seconds)
-                logger.info(f"Sleeping until {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                time.sleep(sleep_seconds)
-
-            except KeyboardInterrupt:
-                logger.info("Bot stopped by user.")
-                sys.exit()
-
-            except Exception as e:
-                logger.error(f"Unexpected crash in main loop: {e}")
-                time.sleep(60)
- 
-
-# For testing: 
 if __name__ == "__main__":
     bot = KingshotBot()

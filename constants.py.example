@@ -2,9 +2,11 @@ import os
 DATA_DIR = "/app/data"
 DB_NAME = os.path.join(DATA_DIR, "kingshot.db")
 LOG_FILE = os.path.join(DATA_DIR, "bot.log")
-DISCORD_TOKEN = ""
 
 SALT = ""
 PLAYER_URL = "https://kingshot-giftcode.centurygame.com/api/player"
 REDEEM_URL = "https://kingshot-giftcode.centurygame.com/api/gift_code"
 ACTIVE_CODES_URL = "https://kingshot.net/api/gift-codes"
+
+DISCORD_TOKEN = ""
+TEST_GUILD_ID =  

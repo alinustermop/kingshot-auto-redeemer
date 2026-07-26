@@ -22,63 +22,13 @@ class KingshotAPI:
         raw_string += constants.SALT
         return hashlib.md5(raw_string.encode("utf-8")).hexdigest()
 
-    def get_player_info(self, fid):
-        # This function also is "Login"  for redeeming
+    def redeem_code(self, fid, kid, cdk):
         time.sleep(self.request_delay)
-
-        current_time = str(int(time.time() * 1000))
+        current_time = str(int(time.time()))
         params = {
-            "fid": fid,
-            "time": current_time,
-        }
-        payload = params.copy()
-        payload['sign'] = self._generate_sign(params)
-
-        try:
-            response = self.session.post(constants.PLAYER_URL, data=payload, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-
-            if data.get("code") == 0:
-                player_data = data['data']
-                stove_lv = player_data.get('stove_lv_content', 0)
-                
-                if len(str(stove_lv)) <= 2:
-                    rendered_level = str(stove_lv)
-                else:
-                    try:
-                        tg_num = str(stove_lv).split('_')[-1].split('.')[0]
-                        rendered_level = f"TG-{tg_num}"
-                    except (IndexError, AttributeError):
-                        rendered_level = "TG-?"
-                player_data['rendered_level'] = rendered_level
-                
-                self.logger.info(f"Player found: {player_data['nickname']} (LVL: {rendered_level})")
-                return player_data
-            
-            self.logger.warning(f"Player {fid} is NOT found: {data.get('msg')}")
-            return None
-        
-        except requests.exceptions.HTTPError as e:
-            if response.status_code == 429:
-                self.logger.error(f"RATE LIMITED (429) checking {fid}. We are going too fast!")
-            else:
-                self.logger.error(f"HTTP Error looking up {fid}: {e}")
-            return None
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Network Error looking up {fid}: {e}")
-            return None
-        except ValueError:
-            self.logger.error(f"Invalid JSON response for {fid}")
-            return None
-
-    def redeem_code(self, fid, cdk):
-        time.sleep(self.request_delay)
-        current_time = str(int(time.time() * 1000))
-        params = {
-            "captcha_code": "",
-            "cdk": cdk,
-            "fid": fid,
+            "cdk": str(cdk),
+            "fid": str(fid),
+            "kid": str(kid),
             "time": current_time,
         }
         payload = params.copy()
@@ -89,9 +39,9 @@ class KingshotAPI:
             result = response.json()
 
             if result.get("code") == 0 or result.get("err_code") == 20000:
-                 self.logger.info(f"Redemption SUCCESS for {fid} - Code: {cdk}")
+                self.logger.info(f"Redemption SUCCESS for {fid} - Code: {cdk}")
             elif result.get("err_code") == 40008:
-                self.logger.info(f"Redemption SKIPPED for {fid} - Code: {cdk} (Already Redeeemed)")
+                self.logger.info(f"Redemption SKIPPED for {fid} - Code: {cdk} (Already Redeemed)")
             elif result.get("err_code") == 40011:
                 self.logger.info(f"Redemption SKIPPED for {fid} - Code: {cdk} (Equivalent was already redeemed)") 
             else:

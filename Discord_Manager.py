@@ -58,7 +58,7 @@ class PlayerPagination(discord.ui.View):
         end = start + self.per_page
         page_players = self.players[start:end]
 
-        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`) *{p['kid']}*" for p in page_players])
+        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`) Server: *{p['kid']}*" for p in page_players])
         embed = discord.Embed(
             title=f"Registered Players ({len(self.players)} total)", 
             description=description, 
@@ -87,7 +87,6 @@ class PlayerPagination(discord.ui.View):
 
 @tasks.loop(hours=24)
 async def daily_redemption_task():
-    # Runs the redemption cycle automatically every 24 hours
     stats = await asyncio.to_thread(ks_bot.run_redemption_cycle)
     await broadcast_stats(stats) 
 
@@ -101,6 +100,29 @@ async def broadcast_stats(stats):
     if not stats:
         return
 
+    channel_ids = ks_bot.db.get_all_target_channels()
+    if not channel_ids:
+        return
+
+    # 1. Announce New Gift Codes if found
+    new_codes = stats.get('new_codes', [])
+    if new_codes:
+        new_code_embed = discord.Embed(
+            title="🎁 New Gift Code Discovered!",
+            description=f"Found **{len(new_codes)}** new code(s):\n" + "\n".join([f"• `{c}`" for c in new_codes]),
+            color=0xffd700
+        )
+        new_code_embed.set_footer(text="Auto-redemption in progress...")
+
+        for cid in channel_ids:
+            channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
+            if channel:
+                try:
+                    await channel.send(embed=new_code_embed)
+                except Exception as e:
+                    logging.getLogger("BOT").error(f"Error broadcasting new code alert to channel {cid}: {e}")
+
+    # 2. Announce Summary Report
     embed = discord.Embed(
         title="✅ Redemption Cycle Finished!", 
         description="Check your in-game mail for rewards.", 
@@ -122,7 +144,6 @@ async def broadcast_stats(stats):
     if stats['failed_players']:
         embed.add_field(name="Failed Players", value=", ".join(stats['failed_players']), inline=False)
 
-    channel_ids = ks_bot.db.get_all_target_channels()
     for cid in channel_ids:
         channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
         if channel:
@@ -145,27 +166,20 @@ async def on_ready():
 
 @bot.tree.command(name="help", description="Show all available commands")
 async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(
-        color=0x66ccff
-    )
+    embed = discord.Embed(color=0x66ccff)
     commands_text = (
-            "**/find [id]**: Search for a player and check if they are in the list\n"
-            "**/add [id]**: Add a new player to the auto-redeem list\n"
-            "**/delete [id]**: Remove a player from the list\n"
+            "**/find [id]**: Check if a player ID is registered in database\n"
+            "**/add [id] [server_id] [nickname]**: Add a new player to the database\n"
+            "**/delete [id]**: Remove a player from the database\n"
+            "**/update_player [id] (new_nickname) (new_server_id)**: Update player details\n"
+            "**/active_codes**: View all active gift codes\n"
             "**/history [id]**: See redeemed codes for a player\n"
             "**/stats**: Show bot statistics\n"
             "**/next**: See when the next auto-redemption cycle starts\n"
             "**/servers_stats**: Show player distribution across servers\n"
             "**/redeem_for [id]**: Redeem all active codes for a specific player ID\n"
-            "**/redeem_all**: Trigger a manual sync cycle *(Owner)*\n"
             "**/set_channel**: Set this channel for redemption reports *(Admins)*\n"
             "**/unset_channel**: Stop reports for this server *(Admins)*\n"
-            "**/list_players**: Show all registered players *(Owner)*\n"
-            "**/list_channels**: List all registered discord channels *(Owner)*\n"
-            "**/list_server_players [kid]**: List all players in a specific server *(Owner)*\n"
-            "**/schedule_start**: Start the 24h automatic loop *(Owner)*\n"
-            "**/schedule_stop**: Stop the 24h automatic loop *(Owner)*\n"
-            "**/logs**: View recent bot activity logs *(Owner)*"
         )
     embed.add_field(name="Available Commands", value=commands_text, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -176,16 +190,137 @@ async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(f"🏓 Pong! Latency: `{latency}ms`", ephemeral=True)
 
 @bot.command()
-async def sync(ctx):
-    if await bot.is_owner(ctx.author):
-        await ctx.send("Attempting to sync slash commands with Discord...")
-        try:
+async def sync(ctx, spec: str = None):
+    """
+    Usage:
+      !sync          -> Instant sync to the current server (Guild)
+      !sync target   -> Instant sync to TEST_GUILD_ID defined in constants.py
+      !sync global   -> Sync globally across all servers (Takes up to 1h to propagate)
+    """
+    if not await bot.is_owner(ctx.author):
+        await ctx.send("❌ You do not have permission to sync commands.")
+        return
+
+    # Send temporary status message and keep reference to it
+    status_msg = await ctx.send("⏳ Processing command sync...")
+
+    try:
+        if spec == "global":
+            # Global sync (standard)
             synced = await bot.tree.sync()
-            await ctx.send(f"Success! Synced {len(synced)} slash commands.")
-        except Exception as e:
-            await ctx.send(f"Sync failed: {e}")
-    else:
-        await ctx.send("You do not have permission to sync commands.")
+            await status_msg.edit(content=f"🌐 **Global Sync Complete!** Synced {len(synced)} slash commands. *(Note: Global updates can take up to 1 hour to display in Discord)*")
+
+        elif spec == "target" and hasattr(constants, "TEST_GUILD_ID") and constants.TEST_GUILD_ID:
+            # Sync directly to the target server ID specified in constants.py
+            guild = discord.Object(id=constants.TEST_GUILD_ID)
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            await status_msg.edit(content=f"⚡ **Instant Target Sync Complete!** Synced {len(synced)} slash commands to Guild ID `{constants.TEST_GUILD_ID}`.")
+
+        elif ctx.guild:
+            # Default behavior: Instant sync to the current server where the command was run
+            guild = ctx.guild
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            await status_msg.edit(content=f"⚡ **Instant Local Sync Complete!** Synced {len(synced)} slash commands to **{guild.name}**.")
+
+        else:
+            await status_msg.edit(content="❌ Cannot sync locally outside of a server. Use `!sync global` or `!sync target` in DMs.")
+
+    except Exception as e:
+        await status_msg.edit(content=f"❌ Sync failed: {e}")
+        logging.getLogger("BOT").error(f"Sync error: {e}")
+
+@bot.command()
+async def clear_guild_sync(ctx):
+    """Clears guild-specific commands so only global commands appear."""
+    if not await bot.is_owner(ctx.author):
+        return
+
+    status_msg = await ctx.send("🧹 Clearing local guild commands...")
+    try:
+        # Clear commands registered specifically to this server
+        bot.tree.clear_commands(guild=ctx.guild)
+        await bot.tree.sync(guild=ctx.guild)
+        await status_msg.edit(content="✅ **Guild commands cleared!** Restart your Discord client (`Ctrl + R`) to update the menu.")
+    except Exception as e:
+        await status_msg.edit(content=f"❌ Failed to clear guild commands: {e}")
+
+@bot.tree.command(name="active_codes", description="Show all active gift codes currently available")
+async def active_codes(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    codes = await asyncio.to_thread(ks_bot.api.get_active_codes)
+    
+    if not codes:
+        await interaction.followup.send("No active gift codes found at the moment.", ephemeral=True)
+        return
+
+    code_list_str = "\n".join([f"• `{c}`" for c in codes])
+    embed = discord.Embed(
+        title="🎁 Active Gift Codes",
+        description=f"Currently active codes ({len(codes)} total):\n\n{code_list_str}",
+        color=0x66ccff
+    )
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="update_player", description="Update a registered player's nickname or server (Kingdom) ID")
+@app_commands.rename(fid="id", nickname="new_nickname", kid="new_server_id")
+@app_commands.describe(
+    fid="The Player ID to update",
+    nickname="New in-game nickname (Optional)",
+    kid="New Kingdom / Server ID (Optional)"
+)
+async def update_player(
+    interaction: discord.Interaction, 
+    fid: str, 
+    nickname: str = None, 
+    kid: int = None
+):
+    await interaction.response.defer(ephemeral=True)
+
+    # 1. Verify player exists in local database
+    existing_player = ks_bot.db.get_player(fid)
+    if not existing_player:
+        await interaction.followup.send(
+            f"❌ Player ID `{fid}` was not found in the database. Use `/add` to register them first.", 
+            ephemeral=True
+        )
+        return
+
+    # 2. Check if at least one field was provided
+    if nickname is None and kid is None:
+        await interaction.followup.send(
+            "⚠️ Please provide at least a new nickname or a new server ID to update.", 
+            ephemeral=True
+        )
+        return
+
+    # 3. Determine new values (fallback to current values if omitted)
+    updated_nickname = nickname if nickname is not None else existing_player['nickname']
+    updated_kid = kid if kid is not None else existing_player['kid']
+
+    # 4. Save updates to SQLite
+    ks_bot.db._update_player_info(fid, updated_nickname, updated_kid)
+
+    # 5. Send confirmation embed
+    embed = discord.Embed(
+        title="✅ Player Info Updated", 
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Player ID", value=f"`{fid}`", inline=True)
+    embed.add_field(
+        name="Nickname", 
+        value=f"{existing_player['nickname']} ➔ **{updated_nickname}**", 
+        inline=False
+    )
+    embed.add_field(
+        name="Server (Kingdom)", 
+        value=f"{existing_player['kid']} ➔ **{updated_kid}**", 
+        inline=False
+    )
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="schedule_start", description="Start the 24-hour automatic redemption loop (Owner only)")
 @app_commands.check(is_bot_owner)
@@ -205,51 +340,43 @@ async def schedule_stop(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("ℹ️ The schedule is not currently running.", ephemeral=True)
 
-@bot.tree.command(name="find", description="Search for a player by ID")
+@bot.tree.command(name="find", description="Search for a player in the database by ID")
 @app_commands.rename(fid="id")
 @app_commands.describe(fid="The Player ID to look up")
 async def find(interaction: discord.Interaction, fid: str):
     await interaction.response.defer(ephemeral=True)
     
-    player_data = ks_bot.api.get_player_info(fid)
+    player_data = ks_bot.db.get_player(fid)
     if player_data:
-        existing_player = ks_bot.db.get_player(fid)
-        if existing_player and (existing_player['nickname'] != player_data['nickname'] or existing_player['kid'] != player_data['kid']):
-            ks_bot.db._update_player_info(fid, player_data['nickname'], player_data['kid'])
-
-        embed = discord.Embed(title="Player Found:", color=0x66ccff)
-        embed.set_thumbnail(url=player_data.get('avatar_image', ''))
-        embed.add_field(name="Nickname", value=player_data.get('nickname', 'Unknown'), inline=True)
-        embed.add_field(name="Level", value=player_data.get('rendered_level', 'N/A'), inline=True)
-        embed.add_field(name="Server", value=player_data.get('kid', 'N/A'), inline=True)
-        
-        if existing_player:
-            embed.description = "Btw, this player is already in the list for redeeming codes."
-        else: 
-            embed.description = f"Btw, this player is NOT in the list yet. Use `/add {fid}` to add them."
-        
+        embed = discord.Embed(title="Player Found in Database:", color=0x66ccff)
+        embed.add_field(name="Nickname", value=player_data['nickname'], inline=True)
+        embed.add_field(name="Player ID", value=str(player_data['fid']), inline=True)
+        embed.add_field(name="Server (Kingdom)", value=str(player_data['kid']), inline=True)
+        embed.description = "This player is in the auto-redeem list."
         await interaction.followup.send(embed=embed, ephemeral=True)
     else:
-        await interaction.followup.send(f"Could not find a player with ID '{fid}'.", ephemeral=True)
+        await interaction.followup.send(f"Player ID `{fid}` is NOT in the list yet. Use `/add` to add them.", ephemeral=True)
 
 @bot.tree.command(name="add", description="Add a player to the auto-redeem list")
-@app_commands.rename(fid="id")
-@app_commands.describe(fid="The Player ID to add")
-async def add(interaction: discord.Interaction, fid: str):
+@app_commands.rename(fid="id", kid="server_id", nickname="nickname")
+@app_commands.describe(
+    fid="The Player ID to add",
+    kid="The Kingdom / Server ID (e.g., 718)",
+    nickname="Player's in-game nickname"
+)
+async def add(interaction: discord.Interaction, fid: str, kid: int, nickname: str):
     await interaction.response.defer(ephemeral=True)
 
     if ks_bot.db.player_exists(fid):
-        await interaction.followup.send(f"Player with ID {fid} is already in the list.", ephemeral=True)
+        await interaction.followup.send(f"Player with ID `{fid}` is already in the list.", ephemeral=True)
         return
 
-    player_data = ks_bot.api.get_player_info(fid)
-    if not player_data:
-        await interaction.followup.send(f"Could not find a player with ID {fid}.", ephemeral=True)
-        return
+    player_data = {"fid": fid, "nickname": nickname, "kid": kid}
 
     embed = discord.Embed(title="Confirm Add Player", color=discord.Color.blue())
-    embed.add_field(name="Nickname", value=player_data.get('nickname', 'Unknown'), inline=True)
-    embed.add_field(name="Level", value=player_data.get('rendered_level', 'N/A'), inline=True)
+    embed.add_field(name="Nickname", value=nickname, inline=True)
+    embed.add_field(name="Player ID", value=fid, inline=True)
+    embed.add_field(name="Server (Kingdom)", value=str(kid), inline=True)
     
     view = ConfirmView()
     message = await interaction.followup.send(embed=embed, view=view, wait=True, ephemeral=True)
@@ -257,7 +384,7 @@ async def add(interaction: discord.Interaction, fid: str):
 
     if view.value is True:
         ks_bot.db._save_player_to_db(player_data)
-        await message.edit(content=f"Player **{player_data['nickname']}** has been added.", embed=None, view=None)
+        await message.edit(content=f"Player **{nickname}** (ID: `{fid}`, Server: `{kid}`) has been added.", embed=None, view=None)
     else:
         await message.edit(content="Action cancelled.", embed=None, view=None)
 
@@ -273,7 +400,7 @@ async def delete(interaction: discord.Interaction, fid: str):
         return
 
     view = ConfirmView()
-    embed = discord.Embed(title="Confirm Delete", description=f"Delete **{player_record['nickname']}**?", color=discord.Color.red())
+    embed = discord.Embed(title="Confirm Delete", description=f"Delete **{player_record['nickname']}** ({fid})?", color=discord.Color.red())
     message = await interaction.followup.send(embed=embed, view=view, wait=True, ephemeral=True)
     await view.wait()
 
@@ -288,7 +415,7 @@ async def delete(interaction: discord.Interaction, fid: str):
 async def list_registered_players(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
-    players = ks_bot.db.show_all_players() #
+    players = ks_bot.db.show_all_players()
     if not players:
         await interaction.followup.send("The list is empty.", ephemeral=True)
         return
@@ -298,13 +425,13 @@ async def list_registered_players(interaction: discord.Interaction):
 @bot.tree.command(name="stats", description="View bot statistics")
 async def stats(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    layers_count = ks_bot.db.get_player_count()
+    players_count = ks_bot.db.get_player_count()
     kingdom_count = ks_bot.db.get_kingdom_count()
     all_codes = ks_bot.db.get_redeemed_codes()
     session_info = ks_bot.db.get_latest_redemption_info()
     
     embed = discord.Embed(title="System Statistics", color=0x66ccff)
-    embed.add_field(name="Registered Players", value=str(layers_count), inline=True)
+    embed.add_field(name="Registered Players", value=str(players_count), inline=True)
     embed.add_field(name="Kingdoms", value=str(kingdom_count), inline=True)
     embed.add_field(name="Total Codes Redeemed", value=str(len(all_codes)), inline=True)
     
@@ -319,9 +446,7 @@ async def stats(interaction: discord.Interaction):
 @app_commands.check(is_bot_owner)
 async def redeem_all(interaction: discord.Interaction):
     await interaction.response.send_message("🚀 Starting manual cycle. Summary will be posted to all registered channels.", ephemeral=True)
-    
     stats = await asyncio.to_thread(ks_bot.run_redemption_cycle)
-    
     await broadcast_stats(stats)
 
 @bot.tree.command(name="logs", description="Check recent bot logs (Owner Only)")
@@ -438,7 +563,7 @@ async def servers_stats(interaction: discord.Interaction):
     description = ""
     for row in stats:
         server_id = row['kid'] if row['kid'] is not None else "Unknown"
-        description += f"**{server_id}**: {row['player_count']} player(s)\n"
+        description += f"**Server {server_id}**: {row['player_count']} player(s)\n"
     
     description += f"\n**Total players**: {total} players"
     
