@@ -53,22 +53,27 @@ docker-compose up -d --build
 
 ```
 4. The system will automatically initialize the SQLite database and log files within the persistent `/app/data` volume.
-### Player Management
+### Player Management & Stats
 * **/find [id]**: Search for a player and check if they are in the list.
 * **/add [id]**: Add a new player to the auto-redeem list.
 * **/delete [id]**: Remove a player from the list.
+* **/update_player [id] (new_nickname) (new_server_id)**: Update player's details.
 * **/history [id]**: See which codes a player has already used.
-* **/redeem_for [id]**: Instantly redeem all active codes for a specific player ID (Ephemeral).
+* **/redeem_for [id]**: Instantly redeem all active codes for a specific player ID.
+* **/active_codes**: View all active gift codes.
+* **/stats**: Show bot statistics and last 24h activity.
+* **/servers_stats**: Show player distribution across servers.
 ### Server & Report Configuration (Admin Only)
 * **/set_channel**: Designates the current channel to receive automated redemption reports.
 * **/unset_channel**: Removes the current server from the automated report list.
-* **/list_players**: Show all registered players in the database.
 ### System Control (Owner Only)
 * **/schedule_start**: Enables the automatic 24-hour redemption loop.
 * **/schedule_stop**: Disables the automatic 24-hour redemption loop.
 * **/redeem_all**: Trigger an immediate manual sync cycle for all players.
+* **/next**: See when the next auto-redemption cycle starts.
 * **/list_channels**: View all Discord servers and channels currently registered for reports.
-* **/logs**: View recent bot activity logs.
-* **/stats**: Show bot statistics and last 24h activity.
+* **/list_players**: Show all registered players in the database.
+* **/list_server_players [kid]**: Show all registered players on the server.
+* **/logs (lines)**: View last bot activity logs.
 ## Disclaimer
 This project is for educational purposes only. Users are responsible for ensuring compliance with the game's terms of service.

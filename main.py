@@ -49,6 +49,16 @@ class KingshotBot:
         self.pause_duration = 180  # Pause for 3 minutes (180s)
         self.request_delay = 5     # Wait 5s between requests
 
+    def check_for_new_codes(self):
+        """Checks for new codes and marks them as announced in the database."""
+        active_codes = self.api.get_active_codes()
+        new_codes = []
+        for code in active_codes:
+            if not self.db.is_code_announced(code):
+                self.db.mark_code_announced(code)
+                new_codes.append(code)
+        return new_codes
+
     def redeem_for_player(self, fid):
         logger.info(f"--- Starting redemption for ID: {fid} ---")
         
@@ -105,9 +115,12 @@ class KingshotBot:
             logger.info("No active codes found. Ending cycle.")
             return
 
-        # Check for newly discovered codes
-        known_codes = set(self.db.get_redeemed_codes())
-        new_codes_found = [c for c in active_codes if c not in known_codes]
+        # Check for newly discovered codes right before redeeming
+        new_codes_found = []
+        for c in active_codes:
+            if not self.db.is_code_announced(c):
+                self.db.mark_code_announced(c)
+                new_codes_found.append(c)
 
         # 2. Fetch Players
         players = self.db.show_all_players()
@@ -121,6 +134,7 @@ class KingshotBot:
         # Statistic Trackers 
         stats_redemptions = defaultdict(int)
         stats_skipped_full = 0   # Players who needed 0 codes
+        stats_already_claimed = 0 # Players attempted, but all codes were already claimed in-game
         stats_skipped_error = 0  # Players dropped due to max retries
         failed_players = []      # List of names who failed
 
@@ -150,7 +164,7 @@ class KingshotBot:
                 
                 codes_to_try.append(code)
 
-            # If no codes are needed, SKIP LOGIN entirely.
+            # If no codes are needed, SKIP entirely.
             if not codes_to_try:
                 if stats_redemptions[fid] == 0:
                     stats_skipped_full += 1
@@ -201,6 +215,10 @@ class KingshotBot:
                     logger.error(f"Dropping {nickname} after 3 failed attempts.")
                     stats_skipped_error += 1
                     failed_players.append(nickname)
+            else:
+                # If processed without error, but 0 NEW codes were successfully redeemed for rewards
+                if stats_redemptions[fid] == 0:
+                    stats_already_claimed += 1
 
     # 4. FINAL STATS
         logger.info("--- Redemption Cycle Completed ---")
@@ -212,6 +230,7 @@ class KingshotBot:
             "total_players": total_players_start,
             "skipped_full": stats_skipped_full,
             "skipped_error": stats_skipped_error,
+            "already_claimed": stats_already_claimed,
             "failed_players": failed_players,
             "distribution": distribution,
             "new_codes": new_codes_found

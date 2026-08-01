@@ -94,7 +94,37 @@ async def daily_redemption_task():
 async def before_daily_redemption():
     await bot.wait_until_ready()
 
+@tasks.loop(hours=8)
+async def code_discovery_task():
+    new_codes = await asyncio.to_thread(ks_bot.check_for_new_codes)
+    if new_codes:
+        await broadcast_new_codes(new_codes)
+
+@code_discovery_task.before_loop
+async def before_code_discovery():
+    await bot.wait_until_ready()
+
 # --- HELPER FUNCTIONS ---
+
+async def broadcast_new_codes(new_codes):
+    channel_ids = ks_bot.db.get_all_target_channels()
+    if not channel_ids:
+        return
+
+    embed = discord.Embed(
+        title="🎁 New Gift Code Discovered!",
+        description=f"Found **{len(new_codes)}** new code(s):\n" + "\n".join([f"• `{c}`" for c in new_codes]),
+        color=0xffd700
+    )
+    embed.set_footer(text="These will be automatically redeemed in the next 24h cycle.")
+
+    for cid in channel_ids:
+        channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
+        if channel:
+            try:
+                await channel.send(embed=embed)
+            except Exception as e:
+                logging.getLogger("BOT").error(f"Error broadcasting new code alert to {cid}: {e}")
 
 async def broadcast_stats(stats):
     if not stats:
@@ -107,26 +137,13 @@ async def broadcast_stats(stats):
     # 1. Announce New Gift Codes if found
     new_codes = stats.get('new_codes', [])
     if new_codes:
-        new_code_embed = discord.Embed(
-            title="🎁 New Gift Code Discovered!",
-            description=f"Found **{len(new_codes)}** new code(s):\n" + "\n".join([f"• `{c}`" for c in new_codes]),
-            color=0xffd700
-        )
-        new_code_embed.set_footer(text="Auto-redemption in progress...")
-
-        for cid in channel_ids:
-            channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
-            if channel:
-                try:
-                    await channel.send(embed=new_code_embed)
-                except Exception as e:
-                    logging.getLogger("BOT").error(f"Error broadcasting new code alert to channel {cid}: {e}")
+        await broadcast_new_codes(new_codes)
 
     # 2. Announce Summary Report
     embed = discord.Embed(
-        title="✅ Redemption Cycle Finished!", 
-        description="Check your in-game mail for rewards.", 
-        color=0x00ff00
+            title="✅ Redemption Cycle Finished!", 
+            description="Check your in-game mail for rewards.", 
+            color=0x00ff00
     )
     embed.add_field(name="Total Players", value=str(stats['total_players']), inline=True)
     embed.add_field(name="Skipped (Full)", value=str(stats['skipped_full']), inline=True)
@@ -325,20 +342,34 @@ async def update_player(
 @bot.tree.command(name="schedule_start", description="Start the 24-hour automatic redemption loop (Owner only)")
 @app_commands.check(is_bot_owner)
 async def schedule_start(interaction: discord.Interaction):
+    started = []
     if not daily_redemption_task.is_running():
         daily_redemption_task.start()
-        await interaction.response.send_message("✅ 24-hour automatic redemption loop has been **STARTED**.", ephemeral=True)
+        started.append("24h Redemption Loop")
+    if not code_discovery_task.is_running():
+        code_discovery_task.start()
+        started.append("8h Code Tracking Loop")
+        
+    if started:
+        await interaction.response.send_message(f"✅ Started: **{', '.join(started)}**.", ephemeral=True)
     else:
-        await interaction.response.send_message("ℹ️ The schedule is already running.", ephemeral=True)
+        await interaction.response.send_message("ℹ️ Both schedules are already running.", ephemeral=True)
 
 @bot.tree.command(name="schedule_stop", description="Stop the 24-hour automatic redemption loop (Owner only)")
 @app_commands.check(is_bot_owner)
 async def schedule_stop(interaction: discord.Interaction):
+    stopped = []
     if daily_redemption_task.is_running():
         daily_redemption_task.cancel()
-        await interaction.response.send_message("🛑 24-hour automatic redemption loop has been **STOPPED**.", ephemeral=True)
+        stopped.append("24h Redemption Loop")
+    if code_discovery_task.is_running():
+        code_discovery_task.cancel()
+        stopped.append("8h Code Tracking Loop")
+        
+    if stopped:
+        await interaction.response.send_message(f"🛑 Stopped: **{', '.join(stopped)}**.", ephemeral=True)
     else:
-        await interaction.response.send_message("ℹ️ The schedule is not currently running.", ephemeral=True)
+        await interaction.response.send_message("ℹ️ No schedules are currently running.", ephemeral=True)
 
 @bot.tree.command(name="find", description="Search for a player in the database by ID")
 @app_commands.rename(fid="id")

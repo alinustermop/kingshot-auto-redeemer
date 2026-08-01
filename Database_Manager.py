@@ -36,6 +36,12 @@ class DatabaseManager:
                     target_channel_id INTEGER
                 )
             ''')
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS announced_codes (
+                    code TEXT PRIMARY KEY,
+                    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             self.conn.commit()
             self.logger.info("Database tables initialized successfully.")
         except sqlite3.Error as e:
@@ -233,6 +239,17 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Error fetching latest session info: {e}")
             return None
+
+    def is_code_announced(self, code):
+        self.cursor.execute('SELECT 1 FROM announced_codes WHERE code = ?', (code,))
+        return self.cursor.fetchone() is not None
+
+    def mark_code_announced(self, code):
+        try:
+            self.cursor.execute("INSERT OR IGNORE INTO announced_codes (code) VALUES (?)", (code,))
+            self.conn.commit()
+        except Exception as e:
+            self.logger.error(f"Database error marking code as announced: {e}")
 
     def close(self):
         self.conn.close()
