@@ -313,8 +313,37 @@ async def redeem_starred(interaction: discord.Interaction):
         return
 
     await interaction.response.send_message(f"⭐ Starting redemption cycle for **{starred_count}** Starred Account(s)...", ephemeral=True)
+    
+    # Run cycle for starred accounts only
     stats = await asyncio.to_thread(ks_bot.run_redemption_cycle, starred_only=True)
-    await broadcast_stats(stats)
+    if not stats:
+        await interaction.followup.send("❌ Redemption cycle finished with no data returned.", ephemeral=True)
+        return
+
+    # Build private response embed
+    embed = discord.Embed(
+        title="⭐ Starred Accounts Redemption Summary", 
+        description="Check in-game mail for rewards.", 
+        color=0xffd700
+    )
+    embed.add_field(name="Total Starred", value=str(stats['total_players']), inline=True)
+    embed.add_field(name="Skipped (DB Synced)", value=str(stats['skipped_full']), inline=True)
+    embed.add_field(name="Already Claimed", value=str(stats.get('already_claimed', 0)), inline=True)
+    embed.add_field(name="Dropped (Errors)", value=str(stats['skipped_error']), inline=True)
+    
+    if stats['distribution']:
+        dist_text = "\n".join([
+            f"• **{num}** player(s) redeemed **{count}** code(s)" 
+            for count, num in sorted(stats['distribution'].items(), reverse=True)
+        ])
+        embed.add_field(name="Success Distribution", value=dist_text, inline=False)
+    else:
+        embed.add_field(name="Status", value="No new codes were redeemed for anyone.", inline=False)
+
+    if stats['failed_players']:
+        embed.add_field(name="Failed Players", value=", ".join(stats['failed_players']), inline=False)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="active_codes", description="Show all active gift codes currently available")
 async def active_codes(interaction: discord.Interaction):
