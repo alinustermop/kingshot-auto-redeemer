@@ -17,9 +17,15 @@ class DatabaseManager:
                     fid INTEGER PRIMARY KEY,
                     nickname TEXT,
                     kid INTEGER,
+                    is_starred INTEGER DEFAULT 0,
                     added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # Ensure is_starred column exists if table was created previously without it
+            try:
+                self.cursor.execute("ALTER TABLE players ADD COLUMN is_starred INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS redemptions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +48,8 @@ class DatabaseManager:
                     discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # Optimization Index
+            self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_redemptions_fid_code ON redemptions (fid, code)')
             self.conn.commit()
             self.logger.info("Database tables initialized successfully.")
         except sqlite3.Error as e:
@@ -68,9 +76,10 @@ class DatabaseManager:
 
     def _save_player_to_db(self, data):
         try:
+            is_starred = data.get('is_starred', 0)
             self.cursor.execute(
-                "INSERT OR IGNORE INTO players (fid, nickname, kid) VALUES (?, ?, ?)", 
-                (data['fid'], data['nickname'], data['kid'])
+                "INSERT OR IGNORE INTO players (fid, nickname, kid, is_starred) VALUES (?, ?, ?, ?)", 
+                (data['fid'], data['nickname'], data['kid'], is_starred)
             )
             self.conn.commit()
 
@@ -108,6 +117,24 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Database error updating player info for {fid}: {e}")
 
+    def toggle_star_player(self, fid, star_status: bool):
+        try:
+            val = 1 if star_status else 0
+            self.cursor.execute("UPDATE players SET is_starred = ? WHERE fid = ?", (val, fid))
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Error toggling star for {fid}: {e}")
+            return False
+
+    def get_starred_players(self):
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players WHERE is_starred = 1')
+        return self.cursor.fetchall()
+
+    def get_starred_count(self):
+        self.cursor.execute('SELECT COUNT(*) as count FROM players WHERE is_starred = 1')
+        return self.cursor.fetchone()['count']
+
     def get_all_registrations(self):
         try:
             self.cursor.execute("SELECT guild_id, target_channel_id FROM guild_settings")
@@ -129,7 +156,7 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
 
     def show_all_players(self):
-        self.cursor.execute('SELECT fid, nickname, kid FROM players')
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players')
         return self.cursor.fetchall()
     
     def get_all_fids(self):
@@ -184,7 +211,7 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
     
     def get_player(self, fid):
-        self.cursor.execute('SELECT fid, nickname, kid FROM players WHERE fid = ?', (fid,))
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players WHERE fid = ?', (fid,))
         return self.cursor.fetchone()
 
     def get_player_count(self):
@@ -204,7 +231,7 @@ class DatabaseManager:
         return self.cursor.fetchall()
 
     def get_players_by_server(self, kid):
-        self.cursor.execute("SELECT fid, nickname, kid FROM players WHERE kid = ?", (kid,))
+        self.cursor.execute("SELECT fid, nickname, kid, is_starred FROM players WHERE kid = ?", (kid,))
         return self.cursor.fetchall()
 
     def get_redeemed_codes(self):

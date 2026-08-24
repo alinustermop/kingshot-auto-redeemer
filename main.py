@@ -107,8 +107,9 @@ class KingshotBot:
             "details": results
         }
 
-    def run_redemption_cycle(self):
-        logger.info("--- Starting Redemption Cycle...")
+    def run_redemption_cycle(self, starred_only=False):
+        mode_str = "STARRED ACCOUNTS ONLY" if starred_only else "ALL PLAYERS"
+        logger.info(f"--- Starting Redemption Cycle ({mode_str})...")
 
         active_codes = self.api.get_active_codes()
         if not active_codes:
@@ -122,10 +123,14 @@ class KingshotBot:
                 self.db.mark_code_announced(c)
                 new_codes_found.append(c)
 
-        # 2. Fetch Players
-        players = self.db.show_all_players()
+        # 2. Fetch Players based on starred_only flag
+        if starred_only:
+            players = self.db.get_starred_players()
+        else:
+            players = self.db.show_all_players()
+
         if not players:
-            logger.warning("No players in database. Add players first.")
+            logger.warning(f"No players found for redemption cycle (Starred Only = {starred_only}).")
             return
 
         # 3. Create Queue
@@ -133,10 +138,10 @@ class KingshotBot:
 
         # Statistic Trackers 
         stats_redemptions = defaultdict(int)
-        stats_skipped_full = 0   # Players who needed 0 codes
+        stats_skipped_full = 0    # Players who needed 0 codes
         stats_already_claimed = 0 # Players attempted, but all codes were already claimed in-game
-        stats_skipped_error = 0  # Players dropped due to max retries
-        failed_players = []      # List of names who failed
+        stats_skipped_error = 0   # Players dropped due to max retries
+        failed_players = []       # List of names who failed
 
         # Operational Trackers
         consecutive_player_errors = 0
@@ -233,7 +238,8 @@ class KingshotBot:
             "already_claimed": stats_already_claimed,
             "failed_players": failed_players,
             "distribution": distribution,
-            "new_codes": new_codes_found
+            "new_codes": new_codes_found,
+            "starred_only": starred_only
         }
 
     def _check_pause(self, error_count):

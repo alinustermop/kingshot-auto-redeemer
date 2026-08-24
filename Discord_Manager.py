@@ -58,10 +58,15 @@ class PlayerPagination(discord.ui.View):
         end = start + self.per_page
         page_players = self.players[start:end]
 
-        description = "\n".join([f"• **{p['nickname']}** (ID: `{p['fid']}`) Server: *{p['kid']}*" for p in page_players])
+        description_lines = []
+        for p in page_players:
+            is_starred = p['is_starred'] if 'is_starred' in p.keys() else 0
+            star_icon = "⭐ " if is_starred else ""
+            description_lines.append(f"• {star_icon}**{p['nickname']}** (ID: `{p['fid']}`) Server: *{p['kid']}*")
+
         embed = discord.Embed(
             title=f"Registered Players ({len(self.players)} total)", 
-            description=description, 
+            description="\n".join(description_lines), 
             color=0x66ccff
         )
         embed.set_footer(text=f"Page {self.current_page + 1} of {self.total_pages}")
@@ -140,13 +145,17 @@ async def broadcast_stats(stats):
         await broadcast_new_codes(new_codes)
 
     # 2. Announce Summary Report
+    is_starred = stats.get('starred_only', False)
+    title_str = "⭐ Starred Redemption Cycle Finished!" if is_starred else "✅ Redemption Cycle Finished!"
+
     embed = discord.Embed(
-            title="✅ Redemption Cycle Finished!", 
-            description="Check your in-game mail for rewards.", 
-            color=0x00ff00
+        title=title_str, 
+        description="Check your in-game mail for rewards.", 
+        color=0x00ff00
     )
     embed.add_field(name="Total Players", value=str(stats['total_players']), inline=True)
     embed.add_field(name="Skipped (Full)", value=str(stats['skipped_full']), inline=True)
+    embed.add_field(name="Already Claimed", value=str(stats.get('already_claimed', 0)), inline=True)
     embed.add_field(name="Dropped (Errors)", value=str(stats['skipped_error']), inline=True)
     
     if stats['distribution']:
@@ -262,6 +271,50 @@ async def clear_guild_sync(ctx):
         await status_msg.edit(content="✅ **Guild commands cleared!** Restart your Discord client (`Ctrl + R`) to update the menu.")
     except Exception as e:
         await status_msg.edit(content=f"❌ Failed to clear guild commands: {e}")
+
+@bot.tree.command(name="star", description="Mark a player account as Starred ⭐ (Owner Only)")
+@app_commands.rename(fid="id")
+@app_commands.check(is_bot_owner)
+async def star_player(interaction: discord.Interaction, fid: str):
+    await interaction.response.defer(ephemeral=True)
+    player = ks_bot.db.get_player(fid)
+    if not player:
+        await interaction.followup.send(f"❌ Player ID `{fid}` not found.", ephemeral=True)
+        return
+
+    success = ks_bot.db.toggle_star_player(fid, True)
+    if success:
+        await interaction.followup.send(f"⭐ **{player['nickname']}** (`{fid}`) is now a Starred Account.", ephemeral=True)
+    else:
+        await interaction.followup.send("❌ Failed to update star status.", ephemeral=True)
+
+@bot.tree.command(name="unstar", description="Remove Starred status from a player account (Owner Only)")
+@app_commands.rename(fid="id")
+@app_commands.check(is_bot_owner)
+async def unstar_player(interaction: discord.Interaction, fid: str):
+    await interaction.response.defer(ephemeral=True)
+    player = ks_bot.db.get_player(fid)
+    if not player:
+        await interaction.followup.send(f"❌ Player ID `{fid}` not found.", ephemeral=True)
+        return
+
+    success = ks_bot.db.toggle_star_player(fid, False)
+    if success:
+        await interaction.followup.send(f"⚪ Removed Starred status from **{player['nickname']}** (`{fid}`).", ephemeral=True)
+    else:
+        await interaction.followup.send("❌ Failed to update star status.", ephemeral=True)
+
+@bot.tree.command(name="redeem_starred", description="Trigger manual redemption for Starred accounts ONLY (Owner Only)")
+@app_commands.check(is_bot_owner)
+async def redeem_starred(interaction: discord.Interaction):
+    starred_count = ks_bot.db.get_starred_count()
+    if starred_count == 0:
+        await interaction.response.send_message("❌ No starred accounts found. Use `/star [id]` to star accounts first.", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"⭐ Starting redemption cycle for **{starred_count}** Starred Account(s)...", ephemeral=True)
+    stats = await asyncio.to_thread(ks_bot.run_redemption_cycle, starred_only=True)
+    await broadcast_stats(stats)
 
 @bot.tree.command(name="active_codes", description="Show all active gift codes currently available")
 async def active_codes(interaction: discord.Interaction):
@@ -379,8 +432,9 @@ async def find(interaction: discord.Interaction, fid: str):
     
     player_data = ks_bot.db.get_player(fid)
     if player_data:
+        star_str = " ⭐ (Starred)" if player_data['is_starred'] else ""
         embed = discord.Embed(title="Player Found in Database:", color=0x66ccff)
-        embed.add_field(name="Nickname", value=player_data['nickname'], inline=True)
+        embed.add_field(name="Nickname", value=f"{player_data['nickname']}{star_str}", inline=True)
         embed.add_field(name="Player ID", value=str(player_data['fid']), inline=True)
         embed.add_field(name="Server (Kingdom)", value=str(player_data['kid']), inline=True)
         embed.description = "This player is in the auto-redeem list."
@@ -457,12 +511,14 @@ async def list_registered_players(interaction: discord.Interaction):
 async def stats(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     players_count = ks_bot.db.get_player_count()
+    starred_count = ks_bot.db.get_starred_count()
     kingdom_count = ks_bot.db.get_kingdom_count()
     all_codes = ks_bot.db.get_redeemed_codes()
     session_info = ks_bot.db.get_latest_redemption_info()
     
     embed = discord.Embed(title="System Statistics", color=0x66ccff)
     embed.add_field(name="Registered Players", value=str(players_count), inline=True)
+    embed.add_field(name="Starred Accounts ⭐", value=str(starred_count), inline=True)
     embed.add_field(name="Kingdoms", value=str(kingdom_count), inline=True)
     embed.add_field(name="Total Codes Redeemed", value=str(len(all_codes)), inline=True)
     
@@ -473,11 +529,27 @@ async def stats(interaction: discord.Interaction):
     embed.add_field(name="All-Time Codes", value=", ".join(all_codes) if all_codes else "None", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="redeem_all", description="Force manual redemption (Owner Only)")
+@bot.tree.command(name="list_starred", description="Show all Starred Accounts ⭐ with pagination (Owner Only)")
+@app_commands.check(is_bot_owner)
+async def list_starred_players(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    players = ks_bot.db.get_starred_players()
+    if not players:
+        await interaction.followup.send("⭐ No starred accounts found in the database.", ephemeral=True)
+        return
+
+    view = PlayerPagination(players, per_page=20)
+    embed = view.create_embed()
+    embed.title = f"⭐ Starred Accounts ({len(players)} total)"
+    
+    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+@bot.tree.command(name="redeem_all", description="Force manual redemption for ALL players (Owner Only)")
 @app_commands.check(is_bot_owner)
 async def redeem_all(interaction: discord.Interaction):
-    await interaction.response.send_message("🚀 Starting manual cycle. Summary will be posted to all registered channels.", ephemeral=True)
-    stats = await asyncio.to_thread(ks_bot.run_redemption_cycle)
+    await interaction.response.send_message("🚀 Starting manual cycle for ALL players. Summary will be posted to all registered channels.", ephemeral=True)
+    stats = await asyncio.to_thread(ks_bot.run_redemption_cycle, starred_only=False)
     await broadcast_stats(stats)
 
 @bot.tree.command(name="logs", description="Check recent bot logs (Owner Only)")
@@ -501,7 +573,8 @@ async def history(interaction: discord.Interaction, fid: str):
         return
 
     codes = ks_bot.db.check_codes_redeemed(fid)
-    embed = discord.Embed(title=f"History: {player['nickname']}", description=f"ID: `{fid}`", color=0x66ccff)
+    star_str = " ⭐" if player['is_starred'] else ""
+    embed = discord.Embed(title=f"History: {player['nickname']}{star_str}", description=f"ID: `{fid}`", color=0x66ccff)
     embed.add_field(name="Redeemed Codes", value=", ".join(codes) if codes else "None", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -616,6 +689,49 @@ async def list_server_players(interaction: discord.Interaction, kid: int):
     embed.title = f"Players in Server {kid}"
     
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+@bot.tree.command(name="remove_channel", description="Unregister a redemption report channel by its Discord Channel ID (Owner Only)")
+@app_commands.describe(channel_id="The Discord Channel ID to remove")
+@app_commands.check(is_bot_owner)
+async def remove_channel(interaction: discord.Interaction, channel_id: str):
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        cid = int(channel_id)
+    except ValueError:
+        await interaction.followup.send("❌ Channel ID must be a valid number.", ephemeral=True)
+        return
+
+    # Delete matching target channel from guild_settings
+    ks_bot.db.cursor.execute("DELETE FROM guild_settings WHERE target_channel_id = ?", (cid,))
+    ks_bot.db.conn.commit()
+
+    if ks_bot.db.cursor.rowcount > 0:
+        await interaction.followup.send(f"✅ Successfully unregistered channel ID `{cid}` from report updates.", ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Channel ID `{cid}` was not found in the registered channels list.", ephemeral=True)
+
+@bot.tree.command(name="find_by_name", description="Search for players in the database by nickname (Owner Only)")
+@app_commands.describe(name="The nickname or partial name to search for")
+@app_commands.check(is_bot_owner)
+async def find_by_name(interaction: discord.Interaction, name: str):
+    await interaction.response.defer(ephemeral=True)
+    
+    ks_bot.db.cursor.execute(
+        "SELECT fid, nickname, kid, is_starred FROM players WHERE nickname LIKE ?", 
+        (f"%{name}%",)
+    )
+    players = ks_bot.db.cursor.fetchall()
+    
+    if not players:
+        await interaction.followup.send(f"❌ No players found matching nickname part `{name}`.", ephemeral=True)
+        return
+
+    view = PlayerPagination(players, per_page=15)
+    embed = view.create_embed()
+    embed.title = f"Search Results for '{name}' ({len(players)} found)"
+    
+    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
