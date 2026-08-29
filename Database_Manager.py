@@ -18,14 +18,25 @@ class DatabaseManager:
                     nickname TEXT,
                     kid INTEGER,
                     is_starred INTEGER DEFAULT 0,
+                    discord_user_id TEXT DEFAULT NULL,
+                    account_type TEXT DEFAULT NULL,
                     added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            # Ensure is_starred column exists if table was created previously without it
+            # Ensure columns exist if table was created previously without them
             try:
                 self.cursor.execute("ALTER TABLE players ADD COLUMN is_starred INTEGER DEFAULT 0")
             except sqlite3.OperationalError:
                 pass  # Column already exists
+            try:
+                self.cursor.execute("ALTER TABLE players ADD COLUMN discord_user_id TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                self.cursor.execute("ALTER TABLE players ADD COLUMN account_type TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS redemptions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +61,7 @@ class DatabaseManager:
             ''')
             # Optimization Index
             self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_redemptions_fid_code ON redemptions (fid, code)')
+            self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_players_discord_id ON players (discord_user_id)')
             self.conn.commit()
             self.logger.info("Database tables initialized successfully.")
         except sqlite3.Error as e:
@@ -77,9 +89,11 @@ class DatabaseManager:
     def _save_player_to_db(self, data):
         try:
             is_starred = data.get('is_starred', 0)
+            discord_user_id = data.get('discord_user_id', None)
+            account_type = data.get('account_type', None)
             self.cursor.execute(
-                "INSERT OR IGNORE INTO players (fid, nickname, kid, is_starred) VALUES (?, ?, ?, ?)", 
-                (data['fid'], data['nickname'], data['kid'], is_starred)
+                "INSERT OR IGNORE INTO players (fid, nickname, kid, is_starred, discord_user_id, account_type) VALUES (?, ?, ?, ?, ?, ?)", 
+                (data['fid'], data['nickname'], data['kid'], is_starred, discord_user_id, account_type)
             )
             self.conn.commit()
 
@@ -105,17 +119,48 @@ class DatabaseManager:
             self.logger.error(f"Database error deleting player: {e}")
             return False
 
-    def _update_player_info(self, fid, new_nickname, new_kid):
+    def _update_player_info(self, fid, new_nickname, new_kid, new_account_type=None):
         try:
             self.cursor.execute(
-                "UPDATE players SET nickname = ?, kid = ? WHERE fid = ?", 
-                (new_nickname, new_kid, fid)
+                "UPDATE players SET nickname = ?, kid = ?, account_type = ? WHERE fid = ?", 
+                (new_nickname, new_kid, new_account_type, fid)
             )
             self.conn.commit()
             if self.cursor.rowcount > 0:
                 self.logger.info(f"Updated player info for ID {fid}")
         except Exception as e:
             self.logger.error(f"Database error updating player info for {fid}: {e}")
+
+    def link_player_to_discord(self, fid, discord_user_id):
+        try:
+            self.cursor.execute(
+                "UPDATE players SET discord_user_id = ? WHERE fid = ?",
+                (str(discord_user_id), fid)
+            )
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Database error linking player {fid}: {e}")
+            return False
+
+    def unlink_player_from_discord(self, fid, discord_user_id):
+        try:
+            self.cursor.execute(
+                "UPDATE players SET discord_user_id = NULL WHERE fid = ? AND discord_user_id = ?",
+                (fid, str(discord_user_id))
+            )
+            self.conn.commit()
+            return self.cursor.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Database error unlinking player {fid}: {e}")
+            return False
+
+    def get_players_by_discord_id(self, discord_user_id):
+        self.cursor.execute(
+            "SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players WHERE discord_user_id = ?", 
+            (str(discord_user_id),)
+        )
+        return self.cursor.fetchall()
 
     def toggle_star_player(self, fid, star_status: bool):
         try:
@@ -128,7 +173,7 @@ class DatabaseManager:
             return False
 
     def get_starred_players(self):
-        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players WHERE is_starred = 1')
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players WHERE is_starred = 1')
         return self.cursor.fetchall()
 
     def get_starred_count(self):
@@ -156,7 +201,7 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
 
     def show_all_players(self):
-        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players')
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players')
         return self.cursor.fetchall()
     
     def get_all_fids(self):
@@ -211,7 +256,7 @@ class DatabaseManager:
         return self.cursor.fetchone() is not None
     
     def get_player(self, fid):
-        self.cursor.execute('SELECT fid, nickname, kid, is_starred FROM players WHERE fid = ?', (fid,))
+        self.cursor.execute('SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players WHERE fid = ?', (fid,))
         return self.cursor.fetchone()
 
     def get_player_count(self):
@@ -231,7 +276,7 @@ class DatabaseManager:
         return self.cursor.fetchall()
 
     def get_players_by_server(self, kid):
-        self.cursor.execute("SELECT fid, nickname, kid, is_starred FROM players WHERE kid = ?", (kid,))
+        self.cursor.execute("SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players WHERE kid = ?", (kid,))
         return self.cursor.fetchall()
 
     def get_redeemed_codes(self):

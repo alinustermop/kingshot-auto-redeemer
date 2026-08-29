@@ -20,7 +20,94 @@ async def is_bot_owner(interaction: discord.Interaction) -> bool:
         return True
     return False
 
-# --- INTERACTIVE VIEW ---
+# --- INTERACTIVE MODALS & VIEWS ---
+
+class FeedbackModal(discord.ui.Modal, title="Anonymous Feedback & Suggestions"):
+    feedback_input = discord.ui.TextInput(
+        label="Your Message, Suggestion, or Complaint",
+        style=discord.TextStyle.paragraph,
+        placeholder="Type your anonymous message here...",
+        required=True,
+        max_length=1000
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message("✅ Thank you! Your anonymous message has been sent to the developer.", ephemeral=True)
+        
+        try:
+            owner_id = getattr(constants, "DEVELOPER_DISCORD_ID", None)
+            if owner_id:
+                owner = await bot.fetch_user(owner_id)
+                if owner:
+                    embed = discord.Embed(
+                        title="📥 New Anonymous Feedback",
+                        description=self.feedback_input.value,
+                        color=0xffa500
+                    )
+                    embed.set_footer(text=f"Sent from server: {interaction.guild.name if interaction.guild else 'Direct Message'}")
+                    await owner.send(embed=embed)
+        except Exception as e:
+            logging.getLogger("BOT").error(f"Failed to send anonymous feedback DM: {e}")
+
+class KingdomStarsModal(discord.ui.Modal, title="Gift Kingdom Stars Schedule"):
+    date_input = discord.ui.TextInput(
+        label="Date (UTC)",
+        style=discord.TextStyle.short,
+        placeholder="e.g., March 15 or 2026-03-15",
+        required=True,
+        max_length=50
+    )
+    time_input = discord.ui.TextInput(
+        label="Time (UTC)",
+        style=discord.TextStyle.short,
+        placeholder="e.g., 14:00 UTC",
+        required=True,
+        max_length=50
+    )
+    gifter_input = discord.ui.TextInput(
+        label="Your In-Game Name / Alias (Optional)",
+        style=discord.TextStyle.short,
+        placeholder="e.g., JohnDoe (leave blank if anonymous)",
+        required=False,
+        max_length=100
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        date_val = self.date_input.value
+        time_val = self.time_input.value
+        gifter_val = self.gifter_input.value.strip() if self.gifter_input.value else "Anonymous"
+
+        await interaction.response.send_message("⭐ Thank you! Your Kingdom Stars schedule has been sent to the developer.", ephemeral=True)
+
+        try:
+            owner_id = getattr(constants, "DEVELOPER_DISCORD_ID", None)
+            if owner_id:
+                owner = await bot.fetch_user(owner_id)
+                if owner:
+                    embed = discord.Embed(
+                        title="⭐ New Kingdom Stars Gift!",
+                        description="Someone wants to gift you stars. Please login and send verification code in WC.",
+                        color=0xffd700
+                    )
+                    embed.add_field(name="Date", value=date_val, inline=True)
+                    embed.add_field(name="Time", value=time_val, inline=True)
+                    embed.add_field(name="Gifter / Alias", value=gifter_val, inline=False)
+                    embed.set_footer(text=f"Server: {interaction.guild.name if interaction.guild else 'Direct Message'}")
+                    await owner.send(embed=embed)
+        except Exception as e:
+            logging.getLogger("BOT").error(f"Failed to send Kingdom Stars DM: {e}")
+
+class SupportView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="💡 Send Anonymous Feedback", style=discord.ButtonStyle.primary)
+    async def feedback_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FeedbackModal())
+
+    @discord.ui.button(label="⭐ Gift Kingdom Stars", style=discord.ButtonStyle.success)
+    async def stars_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(KingdomStarsModal())
 
 class ConfirmView(discord.ui.View):
     def __init__(self, timeout=30):
@@ -62,7 +149,8 @@ class PlayerPagination(discord.ui.View):
         for p in page_players:
             is_starred = p['is_starred'] if 'is_starred' in p.keys() else 0
             star_icon = "⭐ " if is_starred else ""
-            description_lines.append(f"• {star_icon}**{p['nickname']}** (ID: `{p['fid']}`) Server: *{p['kid']}*")
+            acc_type = f" `[{p['account_type'].upper()}]`" if ('account_type' in p.keys() and p['account_type']) else ""
+            description_lines.append(f"• {star_icon}**{p['nickname']}**{acc_type} (ID: `{p['fid']}`) Server: *{p['kid']}*")
 
         embed = discord.Embed(
             title=f"Registered Players ({len(self.players)} total)", 
@@ -83,6 +171,65 @@ class PlayerPagination(discord.ui.View):
     @discord.ui.button(label="Next ➡️", style=discord.ButtonStyle.gray)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.current_page < self.total_pages - 1:
+            self.current_page += 1
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        else:
+            await interaction.response.send_message("You are on the last page.", ephemeral=True)
+
+class HelpPagination(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+        self.current_page = 0
+
+    def create_embed(self):
+        embed = discord.Embed(color=0x66ccff)
+        if self.current_page == 0:
+            embed.title = "🤖 Kingshot Bot Commands (Page 1/2: User Commands)"
+            commands_text = (
+                "**/find [id]**: Check if a player ID is registered in database\n"
+                "**/add [id] [server_id] [nickname] (type)**: Add a new player\n"
+                "**/link [id]**: Link a player ID to your Discord account\n"
+                "**/unlink [id]**: Unlink a player ID from your account\n"
+                "**/my_accounts**: View all your linked Kingshot accounts\n"
+                "**/redeem_for_me**: Redeem active codes for your linked accounts\n"
+                "**/redeem_for [id]**: Redeem active codes for a specific player ID\n"
+                "**/update_player [id] (nickname) (server_id) (type)**: Update player details\n"
+                "**/delete [id]**: Remove a player from the database\n"
+                "**/active_codes**: View all active gift codes\n"
+                "**/history [id]**: See redeemed codes for a player\n"
+                "**/stats**: Show bot statistics\n"
+                "**/next**: See when the next auto-redemption cycle starts\n"
+                "**/servers_stats**: Show player distribution across servers\n"
+                "**/support**: How to support the developer & send feedback\n"
+                "**/feedback**: Send an anonymous suggestion or complaint\n"
+                "**/gift_kingdom_stars**: Schedule a time for gifting Kingdom Stars\n"
+            )
+        else:
+            embed.title = "🛠️ Kingshot Bot Commands (Page 2/2: Admins)"
+            commands_text = (
+                "**/set_channel**: Set this channel for redemption reports *(Admins)*\n"
+                "**/unset_channel**: Stop reports for this server *(Admins)*\n"
+                "**/list_players**: Show all registered players *(Owner)*\n"
+                "**/list_starred**: Show all Starred Accounts ⭐ *(Owner)*\n"
+                "**/list_channels**: List all registered discord channels *(Owner)*\n"
+                "**/list_server_players [kid]**: List all players in a specific server *(Owner)*\n"
+                "**/find_by_name [name]**: Search players by nickname *(Owner)*\n"
+            )
+        embed.add_field(name="Available Commands", value=commands_text, inline=False)
+        embed.set_footer(text=f"Page {self.current_page + 1} of 2")
+        return embed
+
+    @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 0:
+            self.current_page -= 1
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        else:
+            await interaction.response.send_message("You are on the first page.", ephemeral=True)
+
+    @discord.ui.button(label="Next ➡️", style=discord.ButtonStyle.gray)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < 1:
             self.current_page += 1
             await interaction.response.edit_message(embed=self.create_embed(), view=self)
         else:
@@ -192,28 +339,57 @@ async def on_ready():
 
 @bot.tree.command(name="help", description="Show all available commands")
 async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(color=0x66ccff)
-    commands_text = (
-            "**/find [id]**: Check if a player ID is registered in database\n"
-            "**/add [id] [server_id] [nickname]**: Add a new player to the database\n"
-            "**/delete [id]**: Remove a player from the database\n"
-            "**/update_player [id] (new_nickname) (new_server_id)**: Update player details\n"
-            "**/active_codes**: View all active gift codes\n"
-            "**/history [id]**: See redeemed codes for a player\n"
-            "**/stats**: Show bot statistics\n"
-            "**/next**: See when the next auto-redemption cycle starts\n"
-            "**/servers_stats**: Show player distribution across servers\n"
-            "**/redeem_for [id]**: Redeem all active codes for a specific player ID\n"
-            "**/set_channel**: Set this channel for redemption reports *(Admins)*\n"
-            "**/unset_channel**: Stop reports for this server *(Admins)*\n"
-        )
-    embed.add_field(name="Available Commands", value=commands_text, inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    view = HelpPagination()
+    await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
+
+@bot.tree.command(name="feedback", description="Send an anonymous suggestion, review, or complaint to the developer")
+async def feedback_command(interaction: discord.Interaction):
+    await interaction.response.send_modal(FeedbackModal())
 
 @bot.tree.command(name="ping", description="Check bot latency")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
     await interaction.response.send_message(f"🏓 Pong! Latency: `{latency}ms`", ephemeral=True)
+
+@bot.tree.command(name="support", description="How you can support the bot developer and send feedback")
+async def support_command(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="☕ Support the Developer",
+        description=(
+            "Hey! Thanks for using the **Kingshot Auto-Redeemer** bot!\n\n"
+            "This bot is developed and maintained in my free time to keep your accounts fueled with rewards daily.\n"
+            "Also I am working on an extra bot to help our server community *wink*.\n\n"
+            "If this tool saves you time and you'd like to support the hosting costs and future updates, you can check out:\n"
+            f"• **Developer Discord**: Contact `{constants.DEVELOPER_NAME}`\n"
+            "• **Feedback & Suggestions**: Drop ideas using the anonymous form below.\n"
+            f"• **Direct help**: Send a little smth [here]({constants.JAR_LINK}) or `{constants.CARD_NUMBER}`!\n"
+            "• **Gift Kingdom Stars**: Request me to be on the game at a certain time to give you Verification Code.\n\n"
+            "Thank you so much for your help and patience! ❤️"
+        ),
+        color=0xffa500
+    )
+    view = SupportView()
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+@bot.tree.command(name="gift_kingdom_stars", description="Schedule a time for gifting Kingdom Stars")
+async def gift_kingdom_stars(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="⭐ Gift Kingdom Stars",
+        description=(
+            "If you want, you can support me by sending [kingdom stars](https://store.centurygames.com/kingshot) anonymously.\n\n"
+            "Set UTC time and date when I need to be online to send a Verification Code in the World Chat.\n"
+            f"My in-game ID: `{constants.IN_GAME_ID}`\n\n"
+            "Click the button below to submit your schedule!"
+        ),
+        color=0xffd700
+    )
+    
+    class StarsView(discord.ui.View):
+        @discord.ui.button(label="⭐ Submit Schedule", style=discord.ButtonStyle.success)
+        async def open_modal(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+            await btn_interaction.response.send_modal(KingdomStarsModal())
+
+    await interaction.response.send_message(embed=embed, view=StarsView(), ephemeral=True)
 
 @bot.command()
 async def sync(ctx, spec: str = None):
@@ -271,6 +447,105 @@ async def clear_guild_sync(ctx):
         await status_msg.edit(content="✅ **Guild commands cleared!** Restart your Discord client (`Ctrl + R`) to update the menu.")
     except Exception as e:
         await status_msg.edit(content=f"❌ Failed to clear guild commands: {e}")
+
+@bot.tree.command(name="link", description="Link a Kingshot player ID to your Discord account")
+@app_commands.rename(fid="id")
+@app_commands.describe(fid="The Player ID you want to link to your Discord account")
+async def link_account(interaction: discord.Interaction, fid: str):
+    await interaction.response.defer(ephemeral=True)
+
+    player = ks_bot.db.get_player(fid)
+    if not player:
+        await interaction.followup.send(
+            f"❌ Player ID `{fid}` was not found in the database. Use `/add` to register them first.",
+            ephemeral=True
+        )
+        return
+
+    success = ks_bot.db.link_player_to_discord(fid, interaction.user.id)
+    if success:
+        await interaction.followup.send(
+            f"🔗 Successfully linked **{player['nickname']}** (`{fid}`) to your Discord account!",
+            ephemeral=True
+        )
+    else:
+        await interaction.followup.send("❌ Failed to link account due to a database error.", ephemeral=True)
+
+@bot.tree.command(name="unlink", description="Unlink a Kingshot player ID from your Discord account")
+@app_commands.rename(fid="id")
+@app_commands.describe(fid="The Player ID you want to unlink")
+async def unlink_account(interaction: discord.Interaction, fid: str):
+    await interaction.response.defer(ephemeral=True)
+
+    success = ks_bot.db.unlink_player_from_discord(fid, interaction.user.id)
+    if success:
+        await interaction.followup.send(f"🔓 Successfully unlinked player ID `{fid}` from your Discord account.", ephemeral=True)
+    else:
+        await interaction.followup.send(f"❌ Could not unlink. Either ID `{fid}` wasn't linked to your account or doesn't exist.", ephemeral=True)
+
+@bot.tree.command(name="my_accounts", description="View all Kingshot accounts linked to your Discord profile")
+async def my_accounts(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    accounts = ks_bot.db.get_players_by_discord_id(interaction.user.id)
+    if not accounts:
+        await interaction.followup.send(
+            "ℹ️ You have no linked accounts yet. Use `/link [id]` to connect your accounts!",
+            ephemeral=True
+        )
+        return
+
+    lines = []
+    for p in accounts:
+        # Use safe key lookups instead of .get()
+        is_starred = p['is_starred'] if 'is_starred' in p.keys() else 0
+        star_icon = "⭐ " if is_starred else ""
+        
+        acc_type_val = p['account_type'] if ('account_type' in p.keys() and p['account_type']) else None
+        acc_type = f" `[{acc_type_val.upper()}]`" if acc_type_val else ""
+        
+        lines.append(f"• {star_icon}**{p['nickname']}**{acc_type} (ID: `{p['fid']}`) Server: *{p['kid']}*")
+
+    embed = discord.Embed(
+        title=f"👤 Your Linked Accounts ({len(accounts)} total)",
+        description="\n".join(lines),
+        color=0x66ccff
+    )
+    embed.set_footer(text="Use /redeem_for_me to redeem codes for all of them at once!")
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="redeem_for_me", description="Redeem active codes for all your linked Kingshot accounts")
+async def redeem_for_me(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    accounts = ks_bot.db.get_players_by_discord_id(interaction.user.id)
+    if not accounts:
+        await interaction.followup.send(
+            "❌ You have no linked accounts. Use `/link [id]` to link your accounts first!",
+            ephemeral=True
+        )
+        return
+
+    await interaction.followup.send(
+        f"🚀 Starting redemption for **{len(accounts)}** linked account(s)... This may take a minute.",
+        ephemeral=True
+    )
+
+    summary_lines = []
+    for p in accounts:
+        res = await asyncio.to_thread(ks_bot.redeem_for_player, str(p['fid']))
+        if res["status"] == "success":
+            summary_lines.append(f"• **{res['nickname']}** (`{p['fid']}`): Redeemed **{res['redeemed_new']}** new code(s)")
+        else:
+            summary_lines.append(f"• **{res['nickname']}** (`{p['fid']}`): ⚠️ {res['msg']}")
+
+    embed = discord.Embed(
+        title="🎁 Personal Redemption Complete",
+        description="\n".join(summary_lines),
+        color=0x00ff00
+    )
+    embed.set_footer(text="Check your in-game mail for rewards!")
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="star", description="Mark a player account as Starred ⭐ (Owner Only)")
 @app_commands.rename(fid="id")
@@ -363,18 +638,26 @@ async def active_codes(interaction: discord.Interaction):
     )
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="update_player", description="Update a registered player's nickname or server (Kingdom) ID")
-@app_commands.rename(fid="id", nickname="new_nickname", kid="new_server_id")
+@bot.tree.command(name="update_player", description="Update a registered player's nickname, server ID, or account type")
+@app_commands.rename(fid="id", nickname="new_nickname", kid="new_server_id", account_type="type")
 @app_commands.describe(
     fid="The Player ID to update",
     nickname="New in-game nickname (Optional)",
-    kid="New Kingdom / Server ID (Optional)"
+    kid="New Kingdom / Server ID (Optional)",
+    account_type="Account type (Main, Farm, Alt, or None to clear)"
 )
+@app_commands.choices(account_type=[
+    app_commands.Choice(name="Main", value="main"),
+    app_commands.Choice(name="Farm", value="farm"),
+    app_commands.Choice(name="Alt", value="alt"),
+    app_commands.Choice(name="None (Clear)", value="none"),
+])
 async def update_player(
     interaction: discord.Interaction, 
     fid: str, 
     nickname: str = None, 
-    kid: int = None
+    kid: int = None,
+    account_type: app_commands.Choice[str] = None
 ):
     await interaction.response.defer(ephemeral=True)
 
@@ -388,9 +671,9 @@ async def update_player(
         return
 
     # 2. Check if at least one field was provided
-    if nickname is None and kid is None:
+    if nickname is None and kid is None and account_type is None:
         await interaction.followup.send(
-            "⚠️ Please provide at least a new nickname or a new server ID to update.", 
+            "⚠️ Please provide at least a new nickname, server ID, or account type to update.", 
             ephemeral=True
         )
         return
@@ -398,9 +681,14 @@ async def update_player(
     # 3. Determine new values (fallback to current values if omitted)
     updated_nickname = nickname if nickname is not None else existing_player['nickname']
     updated_kid = kid if kid is not None else existing_player['kid']
+    
+    if account_type is not None:
+        updated_type = None if account_type.value == "none" else account_type.value
+    else:
+        updated_type = existing_player['account_type']
 
     # 4. Save updates to SQLite
-    ks_bot.db._update_player_info(fid, updated_nickname, updated_kid)
+    ks_bot.db._update_player_info(fid, updated_nickname, updated_kid, updated_type)
 
     # 5. Send confirmation embed
     embed = discord.Embed(
@@ -416,6 +704,13 @@ async def update_player(
     embed.add_field(
         name="Server (Kingdom)", 
         value=f"{existing_player['kid']} ➔ **{updated_kid}**", 
+        inline=False
+    )
+    old_type_str = existing_player['account_type'].upper() if existing_player['account_type'] else "None"
+    new_type_str = updated_type.upper() if updated_type else "None"
+    embed.add_field(
+        name="Account Type",
+        value=f"{old_type_str} ➔ **{new_type_str}**",
         inline=False
     )
 
@@ -462,8 +757,9 @@ async def find(interaction: discord.Interaction, fid: str):
     player_data = ks_bot.db.get_player(fid)
     if player_data:
         star_str = " ⭐ (Starred)" if player_data['is_starred'] else ""
+        acc_type = f" `[{player_data['account_type'].upper()}]`" if player_data.get('account_type') else ""
         embed = discord.Embed(title="Player Found in Database:", color=0x66ccff)
-        embed.add_field(name="Nickname", value=f"{player_data['nickname']}{star_str}", inline=True)
+        embed.add_field(name="Nickname", value=f"{player_data['nickname']}{star_str}{acc_type}", inline=True)
         embed.add_field(name="Player ID", value=str(player_data['fid']), inline=True)
         embed.add_field(name="Server (Kingdom)", value=str(player_data['kid']), inline=True)
         embed.description = "This player is in the auto-redeem list."
@@ -472,25 +768,46 @@ async def find(interaction: discord.Interaction, fid: str):
         await interaction.followup.send(f"Player ID `{fid}` is NOT in the list yet. Use `/add` to add them.", ephemeral=True)
 
 @bot.tree.command(name="add", description="Add a player to the auto-redeem list")
-@app_commands.rename(fid="id", kid="server_id", nickname="nickname")
+@app_commands.rename(fid="id", kid="server_id", nickname="nickname", account_type="type")
 @app_commands.describe(
     fid="The Player ID to add",
     kid="The Kingdom / Server ID (e.g., 718)",
-    nickname="Player's in-game nickname"
+    nickname="Player's in-game nickname",
+    account_type="Optional account type (Main, Farm, Alt)"
 )
-async def add(interaction: discord.Interaction, fid: str, kid: int, nickname: str):
+@app_commands.choices(account_type=[
+    app_commands.Choice(name="Main", value="main"),
+    app_commands.Choice(name="Farm", value="farm"),
+    app_commands.Choice(name="Alt", value="alt"),
+])
+async def add(
+    interaction: discord.Interaction, 
+    fid: str, 
+    kid: int, 
+    nickname: str,
+    account_type: app_commands.Choice[str] = None
+):
     await interaction.response.defer(ephemeral=True)
 
     if ks_bot.db.player_exists(fid):
         await interaction.followup.send(f"Player with ID `{fid}` is already in the list.", ephemeral=True)
         return
 
-    player_data = {"fid": fid, "nickname": nickname, "kid": kid}
+    type_val = account_type.value if account_type else None
+    player_data = {
+        "fid": fid, 
+        "nickname": nickname, 
+        "kid": kid, 
+        "discord_user_id": str(interaction.user.id),
+        "account_type": type_val
+    }
 
     embed = discord.Embed(title="Confirm Add Player", color=discord.Color.blue())
     embed.add_field(name="Nickname", value=nickname, inline=True)
     embed.add_field(name="Player ID", value=fid, inline=True)
     embed.add_field(name="Server (Kingdom)", value=str(kid), inline=True)
+    if type_val:
+        embed.add_field(name="Type", value=type_val.upper(), inline=True)
     
     view = ConfirmView()
     message = await interaction.followup.send(embed=embed, view=view, wait=True, ephemeral=True)
@@ -603,7 +920,8 @@ async def history(interaction: discord.Interaction, fid: str):
 
     codes = ks_bot.db.check_codes_redeemed(fid)
     star_str = " ⭐" if player['is_starred'] else ""
-    embed = discord.Embed(title=f"History: {player['nickname']}{star_str}", description=f"ID: `{fid}`", color=0x66ccff)
+    acc_type = f" `[{player['account_type'].upper()}]`" if player.get('account_type') else ""
+    embed = discord.Embed(title=f"History: {player['nickname']}{star_str}{acc_type}", description=f"ID: `{fid}`", color=0x66ccff)
     embed.add_field(name="Redeemed Codes", value=", ".join(codes) if codes else "None", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -747,7 +1065,7 @@ async def find_by_name(interaction: discord.Interaction, name: str):
     await interaction.response.defer(ephemeral=True)
     
     ks_bot.db.cursor.execute(
-        "SELECT fid, nickname, kid, is_starred FROM players WHERE nickname LIKE ?", 
+        "SELECT fid, nickname, kid, is_starred, account_type, discord_user_id FROM players WHERE nickname LIKE ?", 
         (f"%{name}%",)
     )
     players = ks_bot.db.cursor.fetchall()
