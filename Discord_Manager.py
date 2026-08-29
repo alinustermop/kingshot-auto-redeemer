@@ -135,10 +135,23 @@ class ConfirmView(discord.ui.View):
 class PlayerPagination(discord.ui.View):
     def __init__(self, players, per_page=15):
         super().__init__(timeout=60)
-        self.players = players
+        
+        # Sorting logic: Starred first (0), Unstarred second (1), then by account type order
+        def sort_key(p):
+            is_starred = 0 if (p['is_starred'] if 'is_starred' in p.keys() else 0) else 1
+            
+            t = (p['account_type'].lower() if ('account_type' in p.keys() and p['account_type']) else "").strip()
+            if t == "main": type_order = 1
+            elif t == "alt": type_order = 2
+            elif t == "farm": type_order = 3
+            else: type_order = 4
+            
+            return (is_starred, type_order)
+
+        self.players = sorted(players, key=sort_key)
         self.per_page = per_page
         self.current_page = 0
-        self.total_pages = (len(players) - 1) // per_page + 1
+        self.total_pages = (len(self.players) - 1) // per_page + 1
 
     def create_embed(self):
         start = self.current_page * self.per_page
@@ -148,9 +161,20 @@ class PlayerPagination(discord.ui.View):
         description_lines = []
         for p in page_players:
             is_starred = p['is_starred'] if 'is_starred' in p.keys() else 0
-            star_icon = "⭐ " if is_starred else ""
-            acc_type = f" `[{p['account_type'].upper()}]`" if ('account_type' in p.keys() and p['account_type']) else ""
-            description_lines.append(f"• {star_icon}**{p['nickname']}**{acc_type} (ID: `{p['fid']}`) Server: *{p['kid']}*")
+            star_suffix = " ⭐" if is_starred else ""
+            
+            # Select icon based on account type
+            t = (p['account_type'].lower() if ('account_type' in p.keys() and p['account_type']) else "").strip()
+            if t == "main":
+                type_icon = "👑"
+            elif t == "alt":
+                type_icon = "🛡️"
+            elif t == "farm":
+                type_icon = "🌾"
+            else:
+                type_icon = "📁"
+
+            description_lines.append(f"• {type_icon} **{p['nickname']}**{star_suffix} — ID: `{p['fid']}` | Server: *{p['kid']}*")
 
         embed = discord.Embed(
             title=f"Registered Players ({len(self.players)} total)", 
@@ -495,20 +519,39 @@ async def my_accounts(interaction: discord.Interaction):
         )
         return
 
-    lines = []
+    mains, alts, farms, unassigned = [], [], [], []
     for p in accounts:
-        # Use safe key lookups instead of .get()
-        is_starred = p['is_starred'] if 'is_starred' in p.keys() else 0
-        star_icon = "⭐ " if is_starred else ""
+        star_icon = "⭐ " if (p['is_starred'] if 'is_starred' in p.keys() else 0) else ""
+        t = (p['account_type'].lower() if ('account_type' in p.keys() and p['account_type']) else "").strip()
         
-        acc_type_val = p['account_type'] if ('account_type' in p.keys() and p['account_type']) else None
-        acc_type = f" `[{acc_type_val.upper()}]`" if acc_type_val else ""
+        line = f"• {star_icon}**{p['nickname']}** — ID: `{p['fid']}` | Server: *{p['kid']}*"
         
-        lines.append(f"• {star_icon}**{p['nickname']}**{acc_type} (ID: `{p['fid']}`) Server: *{p['kid']}*")
+        if t == "main":
+            mains.append(line)
+        elif t == "alt":
+            alts.append(line)
+        elif t == "farm":
+            farms.append(line)
+        else:
+            unassigned.append(line)
+
+    description_parts = []
+    if mains:
+        description_parts.append("👑 **Mains:**")
+        description_parts.extend(mains)
+    if alts:
+        description_parts.append("\n🛡️ **Alts:**")
+        description_parts.extend(alts)
+    if farms:
+        description_parts.append("\n🌾 **Farms:**")
+        description_parts.extend(farms)
+    if unassigned:
+        description_parts.append("\n📁 **Other Accounts:**")
+        description_parts.extend(unassigned)
 
     embed = discord.Embed(
         title=f"👤 Your Linked Accounts ({len(accounts)} total)",
-        description="\n".join(lines),
+        description="\n".join(description_parts),
         color=0x66ccff
     )
     embed.set_footer(text="Use /redeem_for_me to redeem codes for all of them at once!")
@@ -875,7 +918,7 @@ async def stats(interaction: discord.Interaction):
     embed.add_field(name="All-Time Codes", value=", ".join(all_codes) if all_codes else "None", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="list_starred", description="Show all Starred Accounts ⭐ with pagination (Owner Only)")
+@bot.tree.command(name="list_starred", description="Show all Starred Accounts grouped by type (Owner Only)")
 @app_commands.check(is_bot_owner)
 async def list_starred_players(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -885,11 +928,40 @@ async def list_starred_players(interaction: discord.Interaction):
         await interaction.followup.send("⭐ No starred accounts found in the database.", ephemeral=True)
         return
 
-    view = PlayerPagination(players, per_page=20)
-    embed = view.create_embed()
-    embed.title = f"⭐ Starred Accounts ({len(players)} total)"
-    
-    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+    mains, alts, farms, unassigned = [], [], [], []
+    for p in players:
+        t = (p['account_type'].lower() if ('account_type' in p.keys() and p['account_type']) else "").strip()
+        line = f"• **{p['nickname']}** — ID: `{p['fid']}` | Server: *{p['kid']}*"
+        
+        if t == "main":
+            mains.append(line)
+        elif t == "alt":
+            alts.append(line)
+        elif t == "farm":
+            farms.append(line)
+        else:
+            unassigned.append(line)
+
+    description_parts = []
+    if mains:
+        description_parts.append("👑 **Mains:**")
+        description_parts.extend(mains)
+    if alts:
+        description_parts.append("\n🛡️ **Alts:**")
+        description_parts.extend(alts)
+    if farms:
+        description_parts.append("\n🌾 **Farms:**")
+        description_parts.extend(farms)
+    if unassigned:
+        description_parts.append("\n📁 **Other Accounts:**")
+        description_parts.extend(unassigned)
+
+    embed = discord.Embed(
+        title=f"⭐ Starred Accounts ({len(players)} total)", 
+        description="\n".join(description_parts), 
+        color=0xffd700
+    )
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="redeem_all", description="Force manual redemption for ALL players (Owner Only)")
 @app_commands.check(is_bot_owner)
