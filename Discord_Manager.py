@@ -902,7 +902,10 @@ async def find(interaction: discord.Interaction, fid: str):
     player_data = ks_bot.db.get_player(fid)
     if player_data:
         star_str = " ⭐ (Starred)" if player_data['is_starred'] else ""
-        acc_type = f" `[{player_data['account_type'].upper()}]`" if player_data.get('account_type') else ""
+        
+        acc_type_val = player_data['account_type'] if ('account_type' in player_data.keys() and player_data['account_type']) else None
+        acc_type = f" `[{acc_type_val.upper()}]`" if acc_type_val else ""
+        
         embed = discord.Embed(title="Player Found in Database:", color=0x66ccff)
         embed.add_field(name="Nickname", value=f"{player_data['nickname']}{star_str}{acc_type}", inline=True)
         embed.add_field(name="Player ID", value=str(player_data['fid']), inline=True)
@@ -911,7 +914,6 @@ async def find(interaction: discord.Interaction, fid: str):
         await interaction.followup.send(embed=embed, ephemeral=True)
     else:
         await interaction.followup.send(f"Player ID `{fid}` is NOT in the list yet. Use `/add` to add them.", ephemeral=True)
-
 @bot.tree.command(name="add", description="Add a player to the auto-redeem list")
 @app_commands.rename(fid="id", kid="server_id", nickname="nickname", account_type="type")
 @app_commands.describe(
