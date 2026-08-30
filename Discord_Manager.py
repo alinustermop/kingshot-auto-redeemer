@@ -269,7 +269,6 @@ class HelpPagination(discord.ui.View):
         else:
             await interaction.response.send_message("You are on the last page.", ephemeral=True)
 
-## TO TEST
 class BroadcastModal(discord.ui.Modal, title="Broadcast Bot Update"):
     update_title = discord.ui.TextInput(
         label="Update Title",
@@ -871,7 +870,7 @@ async def schedule_start(interaction: discord.Interaction):
         started.append("24h Redemption Loop")
     if not code_discovery_task.is_running():
         code_discovery_task.start()
-        started.append("8h Code Tracking Loop")
+        started.append("2h Code Tracking Loop")
         
     if started:
         await interaction.response.send_message(f"✅ Started: **{', '.join(started)}**.", ephemeral=True)
@@ -887,7 +886,7 @@ async def schedule_stop(interaction: discord.Interaction):
         stopped.append("24h Redemption Loop")
     if code_discovery_task.is_running():
         code_discovery_task.cancel()
-        stopped.append("8h Code Tracking Loop")
+        stopped.append("2h Code Tracking Loop")
         
     if stopped:
         await interaction.response.send_message(f"🛑 Stopped: **{', '.join(stopped)}**.", ephemeral=True)
