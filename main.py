@@ -50,13 +50,18 @@ class KingshotBot:
         self.request_delay = 5     # Wait 5s between requests
 
     def check_for_new_codes(self):
-        """Checks for new codes and marks them as announced in the database."""
+        """Fetches active codes from API, finds unannounced ones, logs them, and returns them."""
         active_codes = self.api.get_active_codes()
+        if not active_codes:
+            return []
+
         new_codes = []
         for code in active_codes:
             if not self.db.is_code_announced(code):
                 self.db.mark_code_announced(code)
                 new_codes.append(code)
+                logger.info(f"New gift code discovered and marked for announcement: {code}")
+                
         return new_codes
 
     def redeem_for_player(self, fid):

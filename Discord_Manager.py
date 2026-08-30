@@ -20,6 +20,17 @@ async def is_bot_owner(interaction: discord.Interaction) -> bool:
         return True
     return False
 
+async def is_admin_or_owner(interaction: discord.Interaction) -> bool:
+    # 1. If they are the bot owner, always allow bypass
+    if await interaction.client.is_owner(interaction.user):
+        return True
+    
+    # 2. Otherwise, check if they have server administrator permissions
+    if interaction.guild and interaction.user.guild_permissions.administrator:
+        return True
+        
+    return False
+
 # --- INTERACTIVE MODALS & VIEWS ---
 
 class FeedbackModal(discord.ui.Modal, title="Anonymous Feedback & Suggestions"):
@@ -211,6 +222,7 @@ class HelpPagination(discord.ui.View):
             embed.title = "🤖 Kingshot Bot Commands (Page 1/2: User Commands)"
             commands_text = (
                 "**/find [id]**: Check if a player ID is registered in database\n"
+                "**/find_by_name [name]**: Search players by nickname\n"
                 "**/add [id] [server_id] [nickname] (type)**: Add a new player\n"
                 "**/link [id]**: Link a player ID to your Discord account\n"
                 "**/unlink [id]**: Unlink a player ID from your account\n"
@@ -221,9 +233,6 @@ class HelpPagination(discord.ui.View):
                 "**/delete [id]**: Remove a player from the database\n"
                 "**/active_codes**: View all active gift codes\n"
                 "**/history [id]**: See redeemed codes for a player\n"
-                "**/stats**: Show bot statistics\n"
-                "**/next**: See when the next auto-redemption cycle starts\n"
-                "**/servers_stats**: Show player distribution across servers\n"
                 "**/support**: How to support the developer & send feedback\n"
                 "**/feedback**: Send an anonymous suggestion or complaint\n"
                 "**/gift_kingdom_stars**: Schedule a time for gifting Kingdom Stars\n"
@@ -231,13 +240,14 @@ class HelpPagination(discord.ui.View):
         else:
             embed.title = "🛠️ Kingshot Bot Commands (Page 2/2: Admins)"
             commands_text = (
+                "**/stats**: Show bot statistics\n"
+                "**/servers_stats**: Show player distribution across servers\n"
+                "**/next**: See when the next auto-redemption cycle starts\n"
                 "**/set_channel**: Set this channel for redemption reports *(Admins)*\n"
                 "**/unset_channel**: Stop reports for this server *(Admins)*\n"
                 "**/list_players**: Show all registered players *(Owner)*\n"
-                "**/list_starred**: Show all Starred Accounts ⭐ *(Owner)*\n"
                 "**/list_channels**: List all registered discord channels *(Owner)*\n"
                 "**/list_server_players [kid]**: List all players in a specific server *(Owner)*\n"
-                "**/find_by_name [name]**: Search players by nickname *(Owner)*\n"
             )
         embed.add_field(name="Available Commands", value=commands_text, inline=False)
         embed.set_footer(text=f"Page {self.current_page + 1} of 2")
@@ -259,6 +269,63 @@ class HelpPagination(discord.ui.View):
         else:
             await interaction.response.send_message("You are on the last page.", ephemeral=True)
 
+## TO TEST
+class BroadcastModal(discord.ui.Modal, title="Broadcast Bot Update"):
+    update_title = discord.ui.TextInput(
+        label="Update Title",
+        style=discord.TextStyle.short,
+        placeholder="e.g., 🚀 Bot Update v1.2 Released!",
+        required=True,
+        max_length=256
+    )
+    
+    update_message = discord.ui.TextInput(
+        label="Update Message (Max ~2500 chars)",
+        style=discord.TextStyle.paragraph,
+        placeholder="Write your update notes here... What's new?",
+        required=True,
+        max_length=2500
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        title = self.update_title.value
+        message = self.update_message.value
+
+        embed = discord.Embed(
+            title=title,
+            description=message,
+            color=0x66ccff
+        )
+        embed.set_footer(text="📢 Kingshot Bot Official Update Announcement")
+
+        # Fetch all registered channels across all servers
+        channel_ids = ks_bot.db.get_all_target_channels()
+        if not channel_ids:
+            await interaction.followup.send("❌ No registered report channels found across any servers.", ephemeral=True)
+            return
+
+        success_count = 0
+        fail_count = 0
+
+        for cid in channel_ids:
+            channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
+            if channel:
+                try:
+                    await channel.send(embed=embed)
+                    success_count += 1
+                except Exception as e:
+                    fail_count += 1
+                    logging.getLogger("BOT").error(f"Failed to broadcast update to channel {cid}: {e}")
+
+        await interaction.followup.send(
+            f"✅ Update broadcast sent successfully!\n"
+            f"• Delivered to: **{success_count}** channel(s)\n"
+            f"• Failed/No Access: **{fail_count}** channel(s)",
+            ephemeral=True
+        )
+
 # --- BACKGROUND TASKS ---
 
 @tasks.loop(hours=24)
@@ -270,7 +337,7 @@ async def daily_redemption_task():
 async def before_daily_redemption():
     await bot.wait_until_ready()
 
-@tasks.loop(hours=8)
+@tasks.loop(hours=2)
 async def code_discovery_task():
     new_codes = await asyncio.to_thread(ks_bot.check_for_new_codes)
     if new_codes:
@@ -292,7 +359,7 @@ async def broadcast_new_codes(new_codes):
         description=f"Found **{len(new_codes)}** new code(s):\n" + "\n".join([f"• `{c}`" for c in new_codes]),
         color=0xffd700
     )
-    embed.set_footer(text="These will be automatically redeemed in the next 24h cycle.")
+    embed.set_footer(text="These will be automatically redeemed in the next redemption cycle.")
 
     for cid in channel_ids:
         channel = bot.get_channel(cid) or await bot.fetch_channel(cid)
@@ -414,6 +481,42 @@ async def gift_kingdom_stars(interaction: discord.Interaction):
             await btn_interaction.response.send_modal(KingdomStarsModal())
 
     await interaction.response.send_message(embed=embed, view=StarsView(), ephemeral=True)
+
+@bot.tree.command(name="broadcast_update", description="Broadcast an update message to all registered server channels (Owner Only)")
+@app_commands.check(is_bot_owner)
+async def broadcast_update(interaction: discord.Interaction):
+    await interaction.response.send_modal(BroadcastModal())
+
+@bot.tree.command(name="force_link", description="Forcefully link a player ID to a specific Discord user ID (Owner Only)")
+@app_commands.rename(fid="player_id", user_id="discord_user_id")
+@app_commands.describe(
+    fid="The Kingshot Player ID (FID)",
+    user_id="The Discord User ID to link the account to"
+)
+@app_commands.check(is_bot_owner)
+async def force_link(interaction: discord.Interaction, fid: str, user_id: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # 1. Validate player exists
+    player = ks_bot.db.get_player(fid)
+    if not player:
+        await interaction.followup.send(f"❌ Player ID `{fid}` not found in the database.", ephemeral=True)
+        return
+
+    # 2. Validate discord user ID format (must be numeric)
+    if not user_id.isdigit():
+        await interaction.followup.send("❌ Discord User ID must be a valid number.", ephemeral=True)
+        return
+
+    # 3. Perform the link
+    success = ks_bot.db.link_player_to_discord(fid, user_id)
+    if success:
+        await interaction.followup.send(
+            f"🔗 Successfully force-linked **{player['nickname']}** (`{fid}`) to Discord User ID `<@{user_id}>` (`{user_id}`).",
+            ephemeral=True
+        )
+    else:
+        await interaction.followup.send("❌ Failed to link account due to a database error.", ephemeral=True)
 
 @bot.command()
 async def sync(ctx, spec: str = None):
@@ -1034,7 +1137,7 @@ async def redeem_for(interaction: discord.Interaction, fid: str):
     await interaction.followup.send(report, ephemeral=True)
 
 @bot.tree.command(name="set_channel", description="Set this channel for redemption reports")
-@app_commands.checks.has_permissions(administrator=True)
+@app_commands.check(is_admin_or_owner)
 async def set_channel(interaction: discord.Interaction):
     ks_bot.db._set_guild_channel(interaction.guild_id, interaction.channel_id)
     await interaction.response.send_message(
@@ -1043,13 +1146,13 @@ async def set_channel(interaction: discord.Interaction):
     )
 
 @bot.tree.command(name="unset_channel", description="Stop sending redemption reports to this server")
-@app_commands.checks.has_permissions(administrator=True)
+@app_commands.check(is_admin_or_owner)
 async def unset_channel(interaction: discord.Interaction):
     success = ks_bot.db._delete_guild_channel(interaction.guild_id)
     if success:
-        await interaction.response.send_message("✅ This server has been unregistered from redemption reports.", ephemeral=True)
+        await interaction.response.send_message(f"✅ This server has been unregistered from redemption reports.", ephemeral=True)
     else:
-        await interaction.response.send_message("❌ This server was not registered in the list.", ephemeral=True)
+        await interaction.response.send_message(f"❌ This server was not registered in the list.", ephemeral=True)
 
 @bot.tree.command(name="list_channels", description="Show all registered Discord servers and channels (Owner Only)")
 @app_commands.check(is_bot_owner)
@@ -1130,9 +1233,8 @@ async def remove_channel(interaction: discord.Interaction, channel_id: str):
     else:
         await interaction.followup.send(f"❌ Channel ID `{cid}` was not found in the registered channels list.", ephemeral=True)
 
-@bot.tree.command(name="find_by_name", description="Search for players in the database by nickname (Owner Only)")
+@bot.tree.command(name="find_by_name", description="Search for players in the database by nickname")
 @app_commands.describe(name="The nickname or partial name to search for")
-@app_commands.check(is_bot_owner)
 async def find_by_name(interaction: discord.Interaction, name: str):
     await interaction.response.defer(ephemeral=True)
     
